@@ -1,6 +1,8 @@
 import pathlib
 import sys
 
+from constants import SIZE
+
 import keras
 import nibabel as nb
 import numpy as np
@@ -10,9 +12,6 @@ from keras.models import Sequential
 from skimage.transform import resize
 
 #  from keras.backend.control_flow_ops.array_ops import placeholder_with_default
-
-SIZE = 128
-
 
 def load_models(folder):
     original_folder = folder.joinpath("Original/Original")
