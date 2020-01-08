@@ -13,6 +13,14 @@ from skimage.transform import resize
 
 #  from keras.backend.control_flow_ops.array_ops import placeholder_with_default
 
+def custom_loss():
+    # Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
+    def loss(y_true, y_pred):
+        return keras.losses.binary_crossentropy(y_true, y_pred)
+
+    # Return a function
+    return loss
+
 def load_models(folder):
     original_folder = folder.joinpath("Original/Original")
     mask_folder = folder.joinpath("Silver-standard-machine-learning/Silver-standard")
@@ -31,6 +39,8 @@ def load_models(folder):
 
         image = image / image.max()
         mask = mask / mask.max()
+
+        print(image.min(), image.max(), mask.min(), mask.max())
 
         yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype(
             "float32"
@@ -163,10 +173,10 @@ def generate_model():
         filters=1, kernel_size=1, kernel_initializer=init, padding="same"
     )(out)
 
-    out = layers.Activation("sigmoid")(out)
+    #  out = layers.Activation("sigmoid")(out)
 
     model = keras.models.Model(input_, out)
-    model.compile("Adam", "mean_squared_error")
+    model.compile("Adam", loss=custom_loss())
 
     return model
 
@@ -188,6 +198,14 @@ def save_model(model):
     # serialize weights to HDF5
     model.save_weights("model.h5")
     print("Saved model to disk")
+
+
+def load_model():
+    with open("model.json", "r") as json_file:
+        model = keras.models.model_from_json(json_file.read())
+    model.load_weights("model.h5")
+    model.compile("Adam", "mean_squared_error")
+    return model
 
 
 def main():
