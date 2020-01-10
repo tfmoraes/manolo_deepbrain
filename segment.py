@@ -33,10 +33,9 @@ def main():
     )
 
 
-    mask = (mask > 0.5) * 255
-
-
-    save_image(mask.astype("uint8"), output_filename)
+    #  mask = (mask > 0.5) * 255
+    image[mask < 0.5] = image.min()
+    save_image(image, output_filename)
 
 
 if __name__ == "__main__":
