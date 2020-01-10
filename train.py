@@ -71,6 +71,7 @@ def train(kmodel, deepbrain_folder):
 def main():
     kmodel = model.generate_model()
     train(kmodel, pathlib.Path("datasets").resolve())
+    model.save_model(kmodel)
 
 
 if __name__ == "__main__":
