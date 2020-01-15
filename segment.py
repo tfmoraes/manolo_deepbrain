@@ -19,6 +19,7 @@ def main():
     output_filename = sys.argv[2]
 
     image = nb.load(image_filename).get_fdata()
+    image = image.swapaxes(2, 0)
     nn_model = model.load_model()
 
     img = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)

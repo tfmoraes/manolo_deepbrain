@@ -2,6 +2,12 @@ import itertools
 import pathlib
 import random
 import sys
+import os
+
+os.environ["KERAS_BACKEND"] = "theano"
+
+if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
+    os.environ["THEANO_FLAGS"] = "device=cuda0"
 
 import file_utils
 import model
