@@ -33,3 +33,5 @@ mkdir -p cc359
 unzip Original.zip -d cc359
 unzip Silver-standard-machine-learning.zip -d cc359
 popd
+
+mkdir -p weights/
