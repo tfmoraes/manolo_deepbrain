@@ -26,12 +26,21 @@ pushd datasets
 echo "Extracting NFBS_Dataset"
 mkdir -p nfbs
 tar xf NFBS_Dataset.tar.gz -C nfbs
-# echo "Extracting aa605acf0f2335b9b8dfdb5c66e18f68"
-# unzip aa605acf0f2335b9b8dfdb5c66e18f68.zip
+
 echo "Extracting cc359"
 mkdir -p cc359
-unzip Original.zip -d cc359
-unzip Silver-standard-machine-learning.zip -d cc359
+unzip -o Original.zip -d cc359
+unzip -o Silver-standard-machine-learning.zip -d cc359
+
+# echo "Extracting ADNI"
+# mkdir -p adni
+# unzip -o aa605acf0f2335b9b8dfdb5c66e18f68.zip -d adni
+# pushd adni
+# mkdir -p images
+# unzip -o MALPEM_cross-sectional_seg138_5074.zip -d images
+# mkdir -p masks
+# unzip -o pincram_bin_brain_masks_5074.zip -d masks
+# popd
 popd
 
 mkdir -p weights/
