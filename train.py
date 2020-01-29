@@ -12,6 +12,7 @@ if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
 import file_utils
 import model
 import nibabel as nb
+import numpy as np
 from constants import EPOCHS, SIZE
 from keras.callbacks import ModelCheckpoint
 from skimage.transform import resize
@@ -43,9 +44,9 @@ def load_models(files):
                     1, SIZE, SIZE, SIZE, 1
                 ), mask.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1)
             else:
-                yield image.astype("float32").swapaxes(i, j).reshape(
+                yield np.rot90(image, axes=(i, j)).astype("float32").reshape(
                     1, SIZE, SIZE, SIZE, 1
-                ), mask.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
+                ), np.rot90(mask, axes=(i, j)).astype("float32").reshape(1, SIZE, SIZE, SIZE, 1)
 
 
 def train(kmodel, deepbrain_folder):
