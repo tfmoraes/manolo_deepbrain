@@ -1,4 +1,4 @@
-# !/bin/bash
+#!/bin/bash
 
 # Creating docker image
 docker build -t manolo_deepbrain .
