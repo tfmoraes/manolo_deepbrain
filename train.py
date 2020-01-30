@@ -4,17 +4,38 @@ import random
 import sys
 import os
 
-os.environ["KERAS_BACKEND"] = "theano"
+#  os.environ["KERAS_BACKEND"] = "theano"
 
-if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
-    os.environ["THEANO_FLAGS"] = "device=cuda0"
+#  if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
+#  os.environ["THEANO_FLAGS"] = "device=cuda0"
+
+import tensorflow as tf
+
+#  tf.disable_eager_execution()
+#  tf.disable_v2_behavior()
 
 import file_utils
 import model
 import nibabel as nb
 from constants import EPOCHS, SIZE
-from keras.callbacks import ModelCheckpoint
 from skimage.transform import resize
+
+
+import keras
+from keras import backend as K
+from keras.callbacks import ModelCheckpoint
+
+import horovod.keras as hvd
+
+hvd.init()
+
+print(">>>>", str(hvd.local_rank()))
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+config.gpu_options.visible_device_list = str(hvd.local_rank())
+K.set_session(tf.Session(config=config))
+
 
 
 def load_models(files):
@@ -36,7 +57,8 @@ def load_models(files):
 
             i, j = next(swaps)
 
-            print(image_filename, image.min(), image.max(), mask.min(), mask.max())
+            with open("output_stdout.txt", "a") as f:
+                f.write(str(image_filename) + "\n")
 
             if i is None:
                 yield image.astype("float32").reshape(
@@ -64,13 +86,38 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
+    opt = keras.optimizers.Adadelta(learning_rate=1.0 * hvd.size())
+    kmodel.compile("adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+    callbacks = [
+        # Horovod: broadcast initial variable states from rank 0 to all other processes.
+        # This is necessary to ensure consistent initialization of all workers when
+        # training is started with random weights or restored from a checkpoint.
+        hvd.callbacks.BroadcastGlobalVariablesCallback(0),
+        # Horovod: average metrics among workers at the end of every epoch.
+        #
+        # Note: This callback must be in the list before the ReduceLROnPlateau,
+        # TensorBoard or other metrics-based callbacks.
+        hvd.callbacks.MetricAverageCallback(),
+        # Horovod: using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
+        # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
+        # the first five epochs. See https://arxiv.org/abs/1706.02677 for details.
+        hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=5, verbose=1),
+        # Reduce the learning rate if training plateaues.
+        keras.callbacks.ReduceLROnPlateau(patience=10, verbose=1),
+    ]
+
+    if hvd.rank() == 0:
+        callbacks.append(best_model)
+        callbacks.append(model.PlotLosses())
+
     kmodel.fit_generator(
         training_files_gen,
-        steps_per_epoch=len(training_files),
+        steps_per_epoch=len(training_files) // hvd.size(),
         epochs=EPOCHS,
         validation_data=testing_files_gen,
         validation_steps=len(testing_files),
-        callbacks=[model.PlotLosses(), best_model],
+        callbacks=callbacks,
     )
 
 
@@ -80,5 +127,4 @@ def main():
     model.save_model(kmodel)
 
 
-if __name__ == "__main__":
-    main()
+main()
