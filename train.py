@@ -16,37 +16,56 @@ import numpy as np
 from constants import EPOCHS, SIZE
 from keras.callbacks import ModelCheckpoint
 from skimage.transform import resize
+from scipy.ndimage import rotate
 
 
-def load_models(files):
-    swaps = itertools.cycle(
-        ((None, None),) + tuple(itertools.combinations(range(3), 2))
-    )
+def apply_transform(image, rot1, rot2):
+    if rot1 > 0:
+        image = rotate(image, angle=rot1, axes=(1, 0))
+    if rot2 > 0:
+        image = rotate(image, angle=rot2, axes=(2, 1))
+    return image
+
+
+def load_models(files, batch_size=1):
+    transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
+
+    size = len(transformations) * len(files)
+    yield int(np.ceil(size / batch_size))
+
     while True:
+        images = []
+        masks = []
         for image_filename, mask_filename in files:
             image = nb.load(str(image_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
-
-            image = resize(
-                image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
-            )
+            image = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
-
             image = model.image_normalize(image)
             mask = model.image_normalize(mask)
+            for rot1, rot2 in transformations:
+                t_image = apply_transform(image, rot1, rot2)
+                t_mask = apply_transform(mask, rot1, rot2)
 
-            i, j = next(swaps)
+                print(image_filename, rot1, rot2)
 
-            print(image_filename, image.min(), image.max(), mask.min(), mask.max())
+                images.append(t_image.astype("float32"))
+                masks.append(t_mask.astype("float32"))
 
-            if i is None:
-                yield image.astype("float32").reshape(
-                    1, SIZE, SIZE, SIZE, 1
-                ), mask.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1)
-            else:
-                yield np.rot90(image, axes=(i, j)).astype("float32").reshape(
-                    1, SIZE, SIZE, SIZE, 1
-                ), np.rot90(mask, axes=(i, j)).astype("float32").reshape(1, SIZE, SIZE, SIZE, 1)
+                if len(images) == batch_size:
+                    yield (
+                        np.stack(images).reshape(-1, SIZE, SIZE, SIZE, 1),
+                        np.stack(masks).reshape(-1, SIZE, SIZE, SIZE, 1)
+                    )
+                    images = []
+                    masks = []
+        if images:
+            yield (
+                np.stack(images).reshape(-1, SIZE, SIZE, SIZE, 1),
+                np.stack(masks).reshape(-1, SIZE, SIZE, SIZE, 1)
+            )
+
+
 
 
 def train(kmodel, deepbrain_folder):
@@ -57,8 +76,10 @@ def train(kmodel, deepbrain_folder):
 
     training_files = files[: int(len(files) * 0.75)]
     testing_files = files[int(len(files) * 0.75) :]
-    training_files_gen = load_models(training_files)
-    testing_files_gen = load_models(testing_files)
+    training_files_gen = load_models(training_files, 8)
+    testing_files_gen = load_models(testing_files, 8)
+    len_training_files = next(training_files_gen)
+    len_testing_files = next(testing_files_gen)
 
     best_model_file = pathlib.Path("weights/weights.h5").resolve()
     best_model = ModelCheckpoint(
@@ -67,10 +88,10 @@ def train(kmodel, deepbrain_folder):
 
     kmodel.fit_generator(
         training_files_gen,
-        steps_per_epoch=len(training_files),
+        steps_per_epoch=len_training_files,
         epochs=EPOCHS,
         validation_data=testing_files_gen,
-        validation_steps=len(testing_files),
+        validation_steps=len_testing_files,
         callbacks=[model.PlotLosses(), best_model],
     )
 
