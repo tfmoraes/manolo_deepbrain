@@ -33,9 +33,11 @@ def load_models(files, batch_size=1):
     size = len(transformations) * len(files)
     yield int(np.ceil(size / batch_size))
 
+
+    images = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
+    masks = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
     while True:
-        images = []
-        masks = []
+        ip = 0
         for image_filename, mask_filename in files:
             image = nb.load(str(image_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
@@ -49,21 +51,19 @@ def load_models(files, batch_size=1):
 
                 print(image_filename, rot1, rot2)
 
-                images.append(t_image.astype("float32"))
-                masks.append(t_mask.astype("float32"))
+                images[ip] = t_image.reshape(SIZE, SIZE, SIZE, 1)
+                masks[ip] = t_mask.reshape(SIZE, SIZE, SIZE, 1)
+                ip += 1
 
-                if len(images) == batch_size:
-                    yield (
-                        np.stack(images).reshape(-1, SIZE, SIZE, SIZE, 1),
-                        np.stack(masks).reshape(-1, SIZE, SIZE, SIZE, 1)
-                    )
-                    images = []
-                    masks = []
-        if images:
-            yield (
-                np.stack(images).reshape(-1, SIZE, SIZE, SIZE, 1),
-                np.stack(masks).reshape(-1, SIZE, SIZE, SIZE, 1)
-            )
+                if ip == batch_size:
+                    yield (images, masks)
+                    images[:] = 0
+                    masks[:] = 0
+                    ip = 0
+        if ip:
+            yield (images, masks)
+            images[:] = 0
+            masks[:] = 0
 
 
 
