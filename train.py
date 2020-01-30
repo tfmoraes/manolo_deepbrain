@@ -18,7 +18,7 @@ import file_utils
 import model
 import nibabel as nb
 import numpy as np
-from constants import EPOCHS, SIZE
+from constants import EPOCHS, SIZE, BATCH_SIZE
 from skimage.transform import resize
 from scipy.ndimage import rotate
 
@@ -91,8 +91,8 @@ def train(kmodel, deepbrain_folder):
 
     training_files = files[: int(len(files) * 0.75)]
     testing_files = files[int(len(files) * 0.75) :]
-    training_files_gen = load_models(training_files, 8)
-    testing_files_gen = load_models(testing_files, 8)
+    training_files_gen = load_models(training_files, BATCH_SIZE)
+    testing_files_gen = load_models(testing_files, BATCH_SIZE)
     len_training_files = next(training_files_gen)
     len_testing_files = next(testing_files_gen)
 
