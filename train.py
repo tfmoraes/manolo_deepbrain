@@ -21,9 +21,9 @@ from scipy.ndimage import rotate
 
 def apply_transform(image, rot1, rot2):
     if rot1 > 0:
-        image = rotate(image, angle=rot1, axes=(1, 0))
+        image = rotate(image, angle=rot1, axes=(1, 0), output=np.float32, order=0, prefilter=False)
     if rot2 > 0:
-        image = rotate(image, angle=rot2, axes=(2, 1))
+        image = rotate(image, angle=rot2, axes=(2, 1), output=np.float32, order=0, prefilter=False)
     return image
 
 
@@ -33,11 +33,10 @@ def load_models(files, batch_size=1):
     size = len(transformations) * len(files)
     yield int(np.ceil(size / batch_size))
 
-
     images = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
     masks = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
+    ip = 0
     while True:
-        ip = 0
         for image_filename, mask_filename in files:
             image = nb.load(str(image_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
@@ -57,15 +56,7 @@ def load_models(files, batch_size=1):
 
                 if ip == batch_size:
                     yield (images, masks)
-                    images[:] = 0
-                    masks[:] = 0
                     ip = 0
-        if ip:
-            yield (images, masks)
-            images[:] = 0
-            masks[:] = 0
-
-
 
 
 def train(kmodel, deepbrain_folder):
