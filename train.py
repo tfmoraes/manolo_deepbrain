@@ -13,7 +13,7 @@ import file_utils
 import model
 import nibabel as nb
 import numpy as np
-from constants import EPOCHS, SIZE, BATCH_SIZE
+from constants import EPOCHS, SIZE, BATCH_SIZE, OVERLAP
 from keras.callbacks import ModelCheckpoint
 from skimage.transform import resize
 from scipy.ndimage import rotate
@@ -34,11 +34,11 @@ def apply_transform(image, rot1, rot2):
 def get_epoch_size(files, patch_size=SIZE):
     size = 0
     for image_filename, mask_filename in files:
-        sz, sy, sx = nb.load(str(image_filename)).get_shape()
+        sz, sy, sx = nb.load(str(image_filename)).shape
         size += int(
-            np.ceil(sz / patch_size)
-            * np.ceil(sy / patch_size)
-            * np.ceil(sx / patch_size)
+            np.ceil(sz / (patch_size - OVERLAP))
+            * np.ceil(sy / (patch_size - OVERLAP))
+            * np.ceil(sx / (patch_size - OVERLAP))
         )
     return size
 
@@ -46,17 +46,19 @@ def get_epoch_size(files, patch_size=SIZE):
 def gen_patches(image, mask, patch_size=SIZE):
     sz, sy, sx = image.shape
     i_cuts = itertools.product(
-        range(0, sz, patch_size), range(0, sy, patch_size), range(0, sx, patch_size)
+        range(0, sz, patch_size - OVERLAP),
+        range(0, sy, patch_size - OVERLAP),
+        range(0, sx, patch_size - OVERLAP),
     )
 
-    print(image.shape, len(list(i_cuts)))
 
+    sub_image = np.empty(
+        shape=(patch_size, patch_size, patch_size), dtype="float32"
+    )
+    sub_mask = np.empty_like(sub_image)
     for iz, iy, ix in i_cuts:
-        sub_image = np.zeros(
-            shape=(patch_size, patch_size, patch_size), dtype="float32"
-        )
-        sub_mask = np.zeros_like(sub_image)
-
+        sub_image[:] = 0
+        sub_mask[:] = 0
         _sub_image = image[
             iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
         ]
@@ -72,9 +74,7 @@ def gen_patches(image, mask, patch_size=SIZE):
         yield sub_image, sub_mask
 
 
-def load_models_patches(files, patch_size=SIZE, batch_size=BATCH_SIZE):
-    transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
-
+def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATCH_SIZE):
     for image_filename, mask_filename in files:
         image = nb.load(str(image_filename)).get_fdata()
         mask = nb.load(str(mask_filename)).get_fdata()
@@ -92,32 +92,20 @@ def load_models_patches(files, patch_size=SIZE, batch_size=BATCH_SIZE):
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
     transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
-    size = get_epoch_size(files, patch_size) * len(transformations)
+    size = get_epoch_size(files, patch_size)
     yield int(np.ceil(size / batch_size))
+    images = np.zeros(shape=(batch_size, patch_size, patch_size, patch_size, 1), dtype=np.float32)
+    masks = np.zeros_like(images)
+    ip = 0
     while True:
-        images = []
-        masks = []
-        for image, mask in load_models_patches(files, patch_size, batch_size):
-            images.append(image)
-            masks.append(mask)
+        for image, mask in load_models_patches(files, transformations, patch_size, batch_size):
+            images[ip] = image.reshape(1, patch_size, patch_size, patch_size, 1)
+            masks[ip] = mask.reshape(1, patch_size, patch_size, patch_size, 1)
+            ip += 1
 
-            if len(images) == batch_size:
-                _images = np.array(images).reshape(
-                    -1, patch_size, patch_size, patch_size, 1
-                )
-                _masks = np.array(masks).reshape(
-                    -1, patch_size, patch_size, patch_size, 1
-                )
-                yield _images, _masks
-                images = []
-                masks = []
-
-        if images:
-            _images = np.array(images).reshape(
-                -1, patch_size, patch_size, patch_size, 1
-            )
-            _masks = np.array(masks).reshape(-1, patch_size, patch_size, patch_size, 1)
-            yield _images, _masks
+            if ip == batch_size:
+                yield images, masks
+                ip = 0
 
 
 def load_models(files, batch_size=1):
@@ -156,8 +144,8 @@ def load_models(files, batch_size=1):
 
 def train(kmodel, deepbrain_folder):
     cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
-    #  nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
-    files = cc359_files  # + nfbs_files
+    nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
+    files = cc359_files  + nfbs_files
     random.shuffle(files)
 
     training_files = files[: int(len(files) * 0.75)]
