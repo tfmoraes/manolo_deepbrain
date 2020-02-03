@@ -174,8 +174,8 @@ def load_models(files, batch_size=1):
 
 def train(kmodel, deepbrain_folder):
     cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
-    #  nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
-    files = cc359_files  # + nfbs_files
+    nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
+    files = cc359_files  + nfbs_files
     random.shuffle(files)
 
     training_files = files[: int(len(files) * 0.75)]
@@ -190,9 +190,10 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
-<<<<<<< HEAD
     opt = keras.optimizers.Adadelta(learning_rate=1.0 * hvd.size())
-    kmodel.compile("adam", loss="binary_crossentropy", metrics=["accuracy"])
+    # Horovod: add Horovod Distributed Optimizer.
+    opt = hvd.DistributedOptimizer(opt)
+    kmodel.compile(optimizer=opt, loss="binary_crossentropy", metrics=["accuracy"])
 
     callbacks = [
         # Horovod: broadcast initial variable states from rank 0 to all other processes.
