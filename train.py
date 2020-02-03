@@ -11,9 +11,10 @@ if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
 
 import file_utils
 import model
+import keras
 import nibabel as nb
 import numpy as np
-from constants import EPOCHS, SIZE, BATCH_SIZE
+from constants import EPOCHS, SIZE, BATCH_SIZE, OVERLAP
 from keras.callbacks import ModelCheckpoint
 from skimage.transform import resize
 from scipy.ndimage import rotate
@@ -36,9 +37,9 @@ def get_epoch_size(files, patch_size=SIZE):
     for image_filename, mask_filename in files:
         sz, sy, sx = nb.load(str(image_filename)).get_shape()
         size += int(
-            np.ceil(sz / patch_size)
-            * np.ceil(sy / patch_size)
-            * np.ceil(sx / patch_size)
+            np.ceil(sz / OVERLAP)
+            * np.ceil(sy / OVERLAP)
+            * np.ceil(sx / OVERLAP)
         )
     return size
 
@@ -46,7 +47,7 @@ def get_epoch_size(files, patch_size=SIZE):
 def gen_patches(image, mask, patch_size=SIZE):
     sz, sy, sx = image.shape
     i_cuts = itertools.product(
-        range(0, sz, patch_size), range(0, sy, patch_size), range(0, sx, patch_size)
+        range(0, sz, OVERLAP), range(0, sy, OVERLAP), range(0, sx, OVERLAP)
     )
 
     print(image.shape, len(list(i_cuts)))
@@ -72,9 +73,7 @@ def gen_patches(image, mask, patch_size=SIZE):
         yield sub_image, sub_mask
 
 
-def load_models_patches(files, patch_size=SIZE, batch_size=BATCH_SIZE):
-    transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
-
+def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATCH_SIZE):
     for image_filename, mask_filename in files:
         image = nb.load(str(image_filename)).get_fdata()
         mask = nb.load(str(mask_filename)).get_fdata()
@@ -91,13 +90,13 @@ def load_models_patches(files, patch_size=SIZE, batch_size=BATCH_SIZE):
 
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
-    transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
+    transformations = list(itertools.product(range(0, 360, 30), range(0, 360, 30)))
     size = get_epoch_size(files, patch_size) * len(transformations)
     yield int(np.ceil(size / batch_size))
     while True:
         images = []
         masks = []
-        for image, mask in load_models_patches(files, patch_size, batch_size):
+        for image, mask in load_models_patches(files, transformations, patch_size, batch_size):
             images.append(image)
             masks.append(mask)
 
@@ -172,13 +171,19 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
+    callbacks = [
+        best_model,
+        keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', patience=20, verbose=True),
+        model.PlotLosses(),
+    ]
+
     kmodel.fit_generator(
         training_files_gen,
         steps_per_epoch=len_training_files,
         epochs=EPOCHS,
         validation_data=testing_files_gen,
         validation_steps=len_testing_files,
-        callbacks=[model.PlotLosses(), best_model],
+        callbacks=callbacks
     )
 
 
