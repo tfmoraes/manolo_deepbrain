@@ -167,14 +167,14 @@ def generate_model():
     out = layers.MaxPooling3D(pool_size=2, strides=2)(out)
     out = layers.Dropout(rate=0.3)(out)
     out = layers.Conv3D(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
         padding="same",
     )(out)
     out = layers.Conv3D(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -186,14 +186,14 @@ def generate_model():
     out = layers.MaxPooling3D(pool_size=2, strides=2)(out)
     out = layers.Dropout(rate=0.3)(out)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
         padding="same",
     )(out)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -206,7 +206,7 @@ def generate_model():
     out = layers.Dropout(rate=0.3)(out)
 
     out = layers.Conv3DTranspose(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         strides=2,
         kernel_initializer=init,
@@ -215,7 +215,7 @@ def generate_model():
     )(out)
     out = layers.concatenate([out, conv3], axis=-1)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -225,7 +225,7 @@ def generate_model():
     out = layers.Dropout(rate=0.3)(out)
 
     out = layers.Conv3DTranspose(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         strides=2,
         kernel_initializer=init,
@@ -234,7 +234,7 @@ def generate_model():
     )(out)
     out = layers.concatenate([out, conv2], axis=-1)
     out = layers.Conv3D(
-        filters=16,
+        filters= SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,

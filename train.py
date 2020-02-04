@@ -3,6 +3,12 @@ import pathlib
 import random
 import sys
 import os
+import json
+
+import socket
+hostname = socket.gethostname()
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 #  os.environ["KERAS_BACKEND"] = "theano"
 
@@ -54,7 +60,7 @@ def apply_transform(image, rot1, rot2):
 def get_epoch_size(files, patch_size=SIZE):
     size = 0
     for image_filename, mask_filename in files:
-        sz, sy, sx = nb.load(str(image_filename)).get_shape()
+        sz, sy, sx = nb.load(str(image_filename)).shape
         size += int(
             np.ceil(sz / OVERLAP)
             * np.ceil(sy / OVERLAP)
@@ -68,14 +74,14 @@ def gen_patches(image, mask, patch_size=SIZE):
     i_cuts = itertools.product(
         range(0, sz, OVERLAP), range(0, sy, OVERLAP), range(0, sx, OVERLAP)
     )
-
-    print(image.shape, len(list(i_cuts)))
+    sub_image = np.empty(
+        shape=(patch_size, patch_size, patch_size), dtype="float32"
+    )
+    sub_mask = np.empty_like(sub_image)
 
     for iz, iy, ix in i_cuts:
-        sub_image = np.zeros(
-            shape=(patch_size, patch_size, patch_size), dtype="float32"
-        )
-        sub_mask = np.zeros_like(sub_image)
+        sub_image[:] = 0
+        sub_mask[:] = 0
 
         _sub_image = image[
             iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
@@ -92,50 +98,73 @@ def gen_patches(image, mask, patch_size=SIZE):
         yield sub_image, sub_mask
 
 
+def get_patch(image, mask, patch, patch_size):
+    sub_image = np.zeros(
+        shape=(patch_size, patch_size, patch_size), dtype="float32"
+    )
+    sub_mask = np.zeros_like(sub_image)
+    iz, iy, ix = patch
+
+    _sub_image = image[
+        iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
+    ]
+    _sub_mask = mask[
+        iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
+    ]
+
+    sz, sy, sx = _sub_image.shape
+
+    sub_image[0:sz, 0:sy, 0:sx] = _sub_image
+    sub_mask[0:sz, 0:sy, 0:sx] = _sub_mask
+
+    return sub_image, sub_mask
+
+
+def gen_image_arrays_patches(dataset, patch_size):
+    last_filename = ""
+    for image_filename, mask_filename, patch in dataset:
+        if image_filename != last_filename:
+            image = nb.load(image_filename).get_fdata()
+            mask = nb.load(mask_filename).get_fdata()
+            print(image_filename)
+
+        last_filename = image_filename
+        sub_image, sub_mask = get_patch(image, mask, patch, patch_size)
+        yield (sub_image, sub_mask)
+
+
+
 def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATCH_SIZE):
     for image_filename, mask_filename in files:
         image = nb.load(str(image_filename)).get_fdata()
         mask = nb.load(str(mask_filename)).get_fdata()
         image = model.image_normalize(image)
         mask = model.image_normalize(mask)
-        for rot1, rot2 in transformations:
-            t_image = apply_transform(image, rot1, rot2)
-            t_mask = apply_transform(mask, rot1, rot2)
+        rot1, rot2 = random.choice(transformations)
+        t_image = apply_transform(image, rot1, rot2)
+        t_mask = apply_transform(mask, rot1, rot2)
 
-            print(image_filename, rot1, rot2)
-
-            for sub_image, sub_mask in gen_patches(t_image, t_mask, patch_size):
-                yield (sub_image, sub_mask)
+        for sub_image, sub_mask in gen_patches(t_image, t_mask, patch_size):
+            yield (sub_image, sub_mask)
 
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
     transformations = list(itertools.product(range(0, 360, 30), range(0, 360, 30)))
-    size = get_epoch_size(files, patch_size) * len(transformations)
+    #  size = get_epoch_size(files, patch_size) #* len(transformations)
+    size = len(files)
     yield int(np.ceil(size / batch_size))
+    images = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
+    masks = np.zeros((batch_size, SIZE, SIZE, SIZE, 1), dtype="float32")
     while True:
-        images = []
-        masks = []
-        for image, mask in load_models_patches(files, transformations, patch_size, batch_size):
-            images.append(image)
-            masks.append(mask)
+        ip = 0
+        for image, mask in gen_image_arrays_patches(files, patch_size):
+            images[ip] = image.reshape(SIZE, SIZE, SIZE, 1)
+            masks[ip] = mask.reshape(SIZE, SIZE, SIZE, 1)
+            ip += 1
 
-            if len(images) == batch_size:
-                _images = np.array(images).reshape(
-                    -1, patch_size, patch_size, patch_size, 1
-                )
-                _masks = np.array(masks).reshape(
-                    -1, patch_size, patch_size, patch_size, 1
-                )
-                yield _images, _masks
-                images = []
-                masks = []
-
-        if images:
-            _images = np.array(images).reshape(
-                -1, patch_size, patch_size, patch_size, 1
-            )
-            _masks = np.array(masks).reshape(-1, patch_size, patch_size, patch_size, 1)
-            yield _images, _masks
+            if ip == batch_size:
+                yield (images, masks)
+                ip = 0
 
 
 def load_models(files, batch_size=1):
@@ -161,7 +190,7 @@ def load_models(files, batch_size=1):
                 t_image = apply_transform(image, rot1, rot2)
                 t_mask = apply_transform(mask, rot1, rot2)
 
-                print(image_filename, rot1, rot2)
+                print(hostname, image_filename, rot1, rot2)
 
                 images[ip] = t_image.reshape(SIZE, SIZE, SIZE, 1)
                 masks[ip] = t_mask.reshape(SIZE, SIZE, SIZE, 1)
@@ -173,17 +202,22 @@ def load_models(files, batch_size=1):
 
 
 def train(kmodel, deepbrain_folder):
-    cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
-    nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
-    files = cc359_files  + nfbs_files
-    random.shuffle(files)
+    with open("train_files.json", "r") as f:
+        training_files = json.load(f)
+        node_training_size = int(np.ceil(len(training_files) / hvd.size()))
+        training_files = training_files[hvd.rank() * node_training_size: (hvd.rank() + 1) * node_training_size]
 
-    training_files = files[: int(len(files) * 0.75)]
-    testing_files = files[int(len(files) * 0.75) :]
+    with open("testing_files.json", "r") as f:
+        testing_files = json.load(f)
+        node_testing_size = int(np.ceil(len(testing_files) / hvd.size()))
+        testing_files = testing_files[hvd.rank() * node_testing_size: (hvd.rank() + 1) * node_testing_size]
+
     training_files_gen = gen_train_arrays(training_files, SIZE, BATCH_SIZE)
     testing_files_gen = gen_train_arrays(testing_files, SIZE, BATCH_SIZE)
     len_training_files = next(training_files_gen)
     len_testing_files = next(testing_files_gen)
+
+    print(len_testing_files, len_training_files)
 
     best_model_file = pathlib.Path("weights/weights.h5").resolve()
     best_model = ModelCheckpoint(
@@ -217,14 +251,26 @@ def train(kmodel, deepbrain_folder):
     if hvd.rank() == 0:
         callbacks.append(best_model)
         callbacks.append(model.PlotLosses())
-
+        callbacks.append(
+            keras.callbacks.tensorboard_v1.TensorBoard(log_dir='./logs',
+                                                       histogram_freq=0,
+                                                       batch_size=BATCH_SIZE,
+                                                       write_graph=True,
+                                                       write_grads=False,
+                                                       write_images=False,
+                                                       embeddings_freq=0,
+                                                       embeddings_layer_names=None,
+                                                       embeddings_metadata=None,
+                                                       embeddings_data=None,
+                                                       update_freq='batch')
+        )
 
     kmodel.fit_generator(
         training_files_gen,
-        steps_per_epoch=len_training_files // hvd.size(),
+        steps_per_epoch=len_training_files,
         epochs=EPOCHS,
         validation_data=testing_files_gen,
-        validation_steps= 3 * len_testing_files // hvd.size(),
+        validation_steps= len_testing_files,
         callbacks=callbacks,
     )
 
