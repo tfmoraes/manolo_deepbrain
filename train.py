@@ -80,14 +80,14 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
         mask = nb.load(str(mask_filename)).get_fdata()
         image = model.image_normalize(image)
         mask = model.image_normalize(mask)
-        for rot1, rot2 in transformations:
-            t_image = apply_transform(image, rot1, rot2)
-            t_mask = apply_transform(mask, rot1, rot2)
+        rot1, rot2 = random.choice(transformations)
+        t_image = apply_transform(image, rot1, rot2)
+        t_mask = apply_transform(mask, rot1, rot2)
 
-            print(image_filename, rot1, rot2)
+        print(image_filename, rot1, rot2)
 
-            for sub_image, sub_mask in gen_patches(t_image, t_mask, patch_size):
-                yield (sub_image, sub_mask)
+        for sub_image, sub_mask in gen_patches(t_image, t_mask, patch_size):
+            yield (sub_image, sub_mask)
 
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
@@ -162,10 +162,10 @@ def train(kmodel, deepbrain_folder):
 
     kmodel.fit_generator(
         training_files_gen,
-        steps_per_epoch=len_training_files,
+        steps_per_epoch=100,
         epochs=EPOCHS,
         validation_data=testing_files_gen,
-        validation_steps=len_testing_files,
+        validation_steps=20,
         callbacks=[model.PlotLosses(), best_model],
     )
 
