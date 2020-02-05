@@ -1,14 +1,13 @@
+import datetime
+import itertools
 import pathlib
 import sys
-import itertools
-import datetime
-
-from constants import SIZE
-import pylab as plt
 
 import keras
 import nibabel as nb
 import numpy as np
+import pylab as plt
+from constants import SIZE
 from keras import backend as K
 from keras import layers
 from keras.models import Sequential
@@ -16,44 +15,44 @@ from skimage.transform import resize
 
 #  from keras.backend.control_flow_ops.array_ops import placeholder_with_default
 
+
 class PlotLosses(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
         self.i = 0
         self.x = []
         self.losses = []
         self.val_losses = []
-       
+
         self.val_dice_coef = []
         self.dice_coef = []
-        
-        
+
         self.fig = plt.figure()
         self.logs = []
 
         plt.plot(self.x, self.losses, color="steelblue", label="train")
         plt.plot(self.x, self.val_losses, color="orange", label="test")
 
-        plt.ylabel('loss')
-        plt.xlabel('epoch')
-        
-        plt.title('model loss')
-        plt.legend(['train', 'test'], loc='upper left')
+        plt.ylabel("loss")
+        plt.xlabel("epoch")
+
+        plt.title("model loss")
+        plt.legend(["train", "test"], loc="upper left")
 
     def on_epoch_end(self, epoch, logs={}):
-                                                                                         
+
         self.logs.append(logs)
 
         self.x.append(self.i)
 
-        self.losses.append(logs.get('loss'))
-        self.val_losses.append(logs.get('val_loss'))
-        self.i += 1                                                                                                                            
-        
+        self.losses.append(logs.get("loss"))
+        self.val_losses.append(logs.get("val_loss"))
+        self.i += 1
+
         plt.plot(self.x, self.losses, color="steelblue")
         plt.plot(self.x, self.val_losses, color="orange")
 
         plt.tight_layout()
-        plt.gcf().savefig('./model_loss.png')
+        plt.gcf().savefig("./model_loss.png")
 
 
 def image_normalize(image, min_=0.0, max_=1.0):
@@ -84,7 +83,9 @@ def load_models(folder):
             image = nb.load(str(original_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
 
-            image = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
+            image = resize(
+                image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
+            )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
 
             image = image_normalize(image)
@@ -92,11 +93,15 @@ def load_models(folder):
 
             print(image.min(), image.max(), mask.min(), mask.max())
 
-            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").reshape(1, SIZE, SIZE, SIZE, 1)
+            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype(
+                "float32"
+            ).reshape(1, SIZE, SIZE, SIZE, 1)
 
             for i, j in itertools.combinations(range(3), 2):
                 print(i, j)
-                yield image.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
+                yield image.astype("float32").swapaxes(i, j).reshape(
+                    1, SIZE, SIZE, SIZE, 1
+                ), mask.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
 
 
 def load_models2(folder):
@@ -113,7 +118,9 @@ def load_models2(folder):
             image = nb.load(str(original_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
 
-            image = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
+            image = resize(
+                image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
+            )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
 
             image = image_normalize(image)
@@ -121,11 +128,15 @@ def load_models2(folder):
 
             print(image.min(), image.max(), mask.min(), mask.max())
 
-            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").reshape(1, SIZE, SIZE, SIZE, 1)
+            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype(
+                "float32"
+            ).reshape(1, SIZE, SIZE, SIZE, 1)
 
             for i, j in itertools.combinations(range(3), 2):
                 print(i, j)
-                yield image.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
+                yield image.astype("float32").swapaxes(i, j).reshape(
+                    1, SIZE, SIZE, SIZE, 1
+                ), mask.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
 
 
 def generate_model():
@@ -156,14 +167,14 @@ def generate_model():
     out = layers.MaxPooling3D(pool_size=2, strides=2)(out)
     out = layers.Dropout(rate=0.3)(out)
     out = layers.Conv3D(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
         padding="same",
     )(out)
     out = layers.Conv3D(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -175,14 +186,14 @@ def generate_model():
     out = layers.MaxPooling3D(pool_size=2, strides=2)(out)
     out = layers.Dropout(rate=0.3)(out)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
         padding="same",
     )(out)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -195,7 +206,7 @@ def generate_model():
     out = layers.Dropout(rate=0.3)(out)
 
     out = layers.Conv3DTranspose(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         strides=2,
         kernel_initializer=init,
@@ -204,7 +215,7 @@ def generate_model():
     )(out)
     out = layers.concatenate([out, conv3], axis=-1)
     out = layers.Conv3D(
-        filters=32,
+        filters=SIZE//4,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -214,7 +225,7 @@ def generate_model():
     out = layers.Dropout(rate=0.3)(out)
 
     out = layers.Conv3DTranspose(
-        filters=16,
+        filters=SIZE//8,
         kernel_size=5,
         strides=2,
         kernel_initializer=init,
@@ -223,7 +234,7 @@ def generate_model():
     )(out)
     out = layers.concatenate([out, conv2], axis=-1)
     out = layers.Conv3D(
-        filters=16,
+        filters= SIZE//8,
         kernel_size=5,
         activation="relu",
         kernel_initializer=init,
@@ -258,8 +269,6 @@ def generate_model():
     out = layers.Dense(1, activation="sigmoid")(out)
 
     model = keras.models.Model(input_, out)
-    model.compile("adam", loss="binary_crossentropy", metrics=['accuracy'])
-    
 
     return model
 
@@ -267,7 +276,14 @@ def generate_model():
 def train(model, deepbrain_folder):
     gen_model = load_models(deepbrain_folder)
     val_model = load_models2(deepbrain_folder)
-    model.fit_generator(gen_model, steps_per_epoch=10 * 4, epochs=200,  validation_data=val_model, validation_steps=40*4, callbacks=[PlotLosses()],)
+    model.fit_generator(
+        gen_model,
+        steps_per_epoch=10 * 4,
+        epochs=200,
+        validation_data=val_model,
+        validation_steps=40 * 4,
+        callbacks=[PlotLosses()],
+    )
 
 
 def save_model(model):
@@ -295,7 +311,7 @@ def load_model():
 def main():
     #  img = np.random.random((SIZE, SIZE, SIZE))
     #  mask = np.random.random((SIZE, SIZE, SIZE))
-    deepbrain_folder = pathlib.Path(sys.argv[1]).resolve()
+    #  deepbrain_folder = pathlib.Path(sys.argv[1]).resolve()
 
     model = generate_model()
     #  train(model, deepbrain_folder)

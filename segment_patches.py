@@ -1,12 +1,13 @@
 import itertools
+import os
 import sys
 
 import nibabel as nb
 import numpy as np
 from skimage.transform import resize
 
-import model
-from constants import SIZE, OVERLAP
+import model_var as model
+from constants import OVERLAP, SIZE
 
 
 def save_image(image, filename, spacing=(1.0, 1.0, 1.0)):
@@ -22,7 +23,7 @@ def main():
 
     image = nb.load(image_filename).get_fdata()
     image = model.image_normalize(image)
-    image = image.swapaxes(2, 0)
+    #  image = image.swapaxes(2, 0)
     mask = np.zeros_like(image, dtype="float32")
     nn_model = model.load_model()
 
@@ -54,7 +55,7 @@ def main():
         sz, sy, sx = _sub_image.shape
 
         sub_image[0:sz, 0:sy, 0:sx] = _sub_image
-        sub_mask[0:sz, 0:sy, 0:sx] = _sub_mask
+        #  sub_mask[0:sz, 0:sy, 0:sx] = _sub_mask
 
         sub_mask[:] = nn_model.predict(
             sub_image.reshape(1, patch_size, patch_size, patch_size, 1)
@@ -62,8 +63,10 @@ def main():
 
         _sub_mask += sub_mask[0:sz, 0:sy, 0:sx]
 
+    print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
     mask = mask / sums
-    save_image(mask, output_filename)
+    print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
+    save_image(model.image_normalize(mask, 0, 1000), output_filename)
 
 
 if __name__ == "__main__":

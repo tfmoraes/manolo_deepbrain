@@ -91,7 +91,7 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
 
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
-    transformations = list(itertools.product(range(0, 360, 90), range(0, 360, 90)))
+    transformations = list(itertools.product(range(0, 360, 15), range(0, 360, 15)))
     size = get_epoch_size(files, patch_size)
     yield int(np.ceil(size / batch_size))
     images = np.zeros(shape=(batch_size, patch_size, patch_size, patch_size, 1), dtype=np.float32)
@@ -148,8 +148,8 @@ def train(kmodel, deepbrain_folder):
     files = cc359_files  + nfbs_files
     random.shuffle(files)
 
-    training_files = files[: int(len(files) * 0.75)]
-    testing_files = files[int(len(files) * 0.75) :]
+    training_files = files[: int(len(files) * 0.80)]
+    testing_files = files[int(len(files) * 0.80) :]
     training_files_gen = gen_train_arrays(training_files, SIZE, BATCH_SIZE)
     testing_files_gen = gen_train_arrays(testing_files, SIZE, BATCH_SIZE)
     len_training_files = next(training_files_gen)
@@ -162,16 +162,18 @@ def train(kmodel, deepbrain_folder):
 
     kmodel.fit_generator(
         training_files_gen,
-        steps_per_epoch=100,
+        steps_per_epoch=1000,
         epochs=EPOCHS,
         validation_data=testing_files_gen,
-        validation_steps=20,
+        validation_steps=100,
         callbacks=[model.PlotLosses(), best_model],
+        initial_epoch=3
     )
 
 
 def main():
     kmodel = model.generate_model()
+    kmodel.load_weights("weights/weights.h5")
     train(kmodel, pathlib.Path("datasets").resolve())
     model.save_model(kmodel)
 
