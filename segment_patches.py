@@ -21,8 +21,9 @@ def main():
     output_filename = sys.argv[2]
 
     image = nb.load(image_filename).get_fdata()
+    image = model.image_normalize(image)
     image = image.swapaxes(2, 0)
-    mask = np.zeros_like(image, dtype="uint8")
+    mask = np.zeros_like(image, dtype="float32")
     nn_model = model.load_model()
 
     patch_size = SIZE
@@ -35,6 +36,7 @@ def main():
 
     sub_image = np.empty(shape=(patch_size, patch_size, patch_size), dtype="float32")
     sub_mask = np.empty_like(sub_image)
+    sums = np.zeros_like(image)
     for iz, iy, ix in i_cuts:
         print(iz, iy, ix)
         sub_image[:] = 0
@@ -47,6 +49,8 @@ def main():
             iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
         ]
 
+        sums[iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size] += 1
+
         sz, sy, sx = _sub_image.shape
 
         sub_image[0:sz, 0:sy, 0:sx] = _sub_image
@@ -56,9 +60,10 @@ def main():
             sub_image.reshape(1, patch_size, patch_size, patch_size, 1)
         ).reshape(sub_mask.shape)
 
-        _sub_mask[:] = np.logical_or(sub_mask[0:sz, 0:sy, 0:sx] > 0.5, _sub_mask)
+        _sub_mask += sub_mask[0:sz, 0:sy, 0:sx]
 
-    save_image(mask.reshape(image.shape), output_filename)
+    mask = mask / sums
+    save_image(mask, output_filename)
 
 
 if __name__ == "__main__":
