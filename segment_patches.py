@@ -39,7 +39,6 @@ def main():
     sub_mask = np.empty_like(sub_image)
     sums = np.zeros_like(image)
     for iz, iy, ix in i_cuts:
-        print(iz, iy, ix)
         sub_image[:] = 0
         sub_mask[:] = 0
         _sub_image = image[
@@ -60,6 +59,8 @@ def main():
         sub_mask[:] = nn_model.predict(
             sub_image.reshape(1, patch_size, patch_size, patch_size, 1)
         ).reshape(sub_mask.shape)
+
+        print(iz, iy, ix, sub_mask.min(), sub_mask.max())
 
         _sub_mask += sub_mask[0:sz, 0:sy, 0:sx]
 

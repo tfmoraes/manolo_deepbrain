@@ -125,8 +125,10 @@ def gen_image_arrays_patches(dataset, patch_size):
     for image_filename, mask_filename, patch in dataset:
         if image_filename != last_filename:
             image = nb.load(image_filename).get_fdata()
+            image = model.image_normalize(image)
             mask = nb.load(mask_filename).get_fdata()
-            print(image_filename)
+            mask = model.image_normalize(mask)
+            print(image_filename, image.min(), image.max(), mask.min(), mask.max())
 
         last_filename = image_filename
         sub_image, sub_mask = get_patch(image, mask, patch, patch_size)
