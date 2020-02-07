@@ -1,22 +1,31 @@
+import argparse
 import itertools
+import os
 import pathlib
 import random
 import sys
-import os
 
 os.environ["KERAS_BACKEND"] = "theano"
 
-if len(sys.argv) == 2 and sys.argv[1] == "--gpu":
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--gpu", action="store_true", help="use gpu", dest="use_gpu")
+parser.add_argument("-c", "--continue", type=int, dest="initial_epoch")
+args, _ = parser.parse_known_args()
+
+if args.use_gpu:
     os.environ["THEANO_FLAGS"] = "device=cuda0"
 
 import file_utils
 import model
 import nibabel as nb
 import numpy as np
-from constants import EPOCHS, SIZE, BATCH_SIZE, OVERLAP
+from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE
 from keras.callbacks import ModelCheckpoint
-from skimage.transform import resize
 from scipy.ndimage import rotate
+from skimage.transform import resize
+
+
 
 
 def apply_transform(image, rot1, rot2):
@@ -160,20 +169,31 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
-    kmodel.fit_generator(
-        training_files_gen,
-        steps_per_epoch=1000,
-        epochs=EPOCHS,
-        validation_data=testing_files_gen,
-        validation_steps=100,
-        callbacks=[model.PlotLosses(), best_model],
-        initial_epoch=3
-    )
+    if args.initial_epoch:
+        kmodel.fit_generator(
+            training_files_gen,
+            steps_per_epoch=len_training_files,
+            epochs=EPOCHS,
+            validation_data=testing_files_gen,
+            validation_steps=len_testing_files,
+            callbacks=[model.PlotLosses(), best_model],
+            initial_epoch=args.initial_epoch
+        )
+    else:
+        kmodel.fit_generator(
+            training_files_gen,
+            steps_per_epoch=len_training_files,
+            epochs=EPOCHS,
+            validation_data=testing_files_gen,
+            validation_steps=len_testing_files,
+            callbacks=[model.PlotLosses(), best_model]
+        )
 
 
 def main():
     kmodel = model.generate_model()
-    kmodel.load_weights("weights/weights.h5")
+    if args.initial_epoch:
+        kmodel.load_weights("weights/weights.h5")
     train(kmodel, pathlib.Path("datasets").resolve())
     model.save_model(kmodel)
 
