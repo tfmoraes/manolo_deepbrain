@@ -6,7 +6,7 @@ import nibabel as nb
 import numpy as np
 from skimage.transform import resize
 
-import model_var as model
+import model
 from constants import OVERLAP, SIZE
 
 

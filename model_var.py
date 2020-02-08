@@ -269,6 +269,7 @@ def generate_model():
     out = layers.Dense(1, activation="sigmoid")(out)
 
     model = keras.models.Model(input_, out)
+    model.compile("adam", loss="binary_crossentropy", metrics=['accuracy'])
 
     return model
 

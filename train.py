@@ -20,7 +20,7 @@ import file_utils
 import model
 import nibabel as nb
 import numpy as np
-from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE
+from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
 from keras.callbacks import ModelCheckpoint
 from scipy.ndimage import rotate
 from skimage.transform import resize
@@ -65,7 +65,7 @@ def gen_patches(image, mask, patch_size=SIZE):
         shape=(patch_size, patch_size, patch_size), dtype="float32"
     )
     sub_mask = np.empty_like(sub_image)
-    for iz, iy, ix in i_cuts:
+    for iz, iy, ix in random.choices(list(i_cuts), k=NUM_PATCHES):
         sub_image[:] = 0
         sub_mask[:] = 0
         _sub_image = image[
@@ -93,7 +93,7 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
         t_image = apply_transform(image, rot1, rot2)
         t_mask = apply_transform(mask, rot1, rot2)
 
-        print(image_filename, rot1, rot2)
+        print(image_filename, mask_filename, rot1, rot2, t_image.min(), t_image.max(), t_mask.min(), t_mask.max())
 
         for sub_image, sub_mask in gen_patches(t_image, t_mask, patch_size):
             yield (sub_image, sub_mask)
@@ -102,7 +102,7 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
     transformations = list(itertools.product(range(0, 360, 15), range(0, 360, 15)))
     size = get_epoch_size(files, patch_size)
-    yield int(np.ceil(size / batch_size))
+    yield int(np.ceil(NUM_PATCHES * len(files) / batch_size))
     images = np.zeros(shape=(batch_size, patch_size, patch_size, patch_size, 1), dtype=np.float32)
     masks = np.zeros_like(images)
     ip = 0

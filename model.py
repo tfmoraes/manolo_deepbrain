@@ -295,7 +295,7 @@ def load_model():
 def main():
     #  img = np.random.random((SIZE, SIZE, SIZE))
     #  mask = np.random.random((SIZE, SIZE, SIZE))
-    deepbrain_folder = pathlib.Path(sys.argv[1]).resolve()
+    #  deepbrain_folder = pathlib.Path(sys.argv[1]).resolve()
 
     model = generate_model()
     #  train(model, deepbrain_folder)
