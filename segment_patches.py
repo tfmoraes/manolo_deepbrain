@@ -1,6 +1,19 @@
+import argparse
 import itertools
 import os
-import sys
+
+os.environ["KERAS_BACKEND"] = "theano"
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--gpu", action="store_true", help="use gpu", dest="use_gpu")
+parser.add_argument("-p", action="store_true", help="return probability", dest="ret_prob")
+parser.add_argument("-i", "--input", help="Input mri image")
+parser.add_argument("-o", "--output", help="Output mri image")
+args, _ = parser.parse_known_args()
+
+if args.use_gpu:
+    os.environ["THEANO_FLAGS"] = "device=cuda0"
 
 import nibabel as nb
 import numpy as np
@@ -18,8 +31,8 @@ def save_image(image, filename, spacing=(1.0, 1.0, 1.0)):
 
 
 def main():
-    image_filename = sys.argv[1]
-    output_filename = sys.argv[2]
+    image_filename = args.input
+    output_filename = args.output
 
     image = nb.load(image_filename).get_fdata()
     image = model.image_normalize(image)
@@ -67,7 +80,11 @@ def main():
     print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
     mask = mask / sums
     print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
-    save_image(model.image_normalize(mask, 0, 1000), output_filename)
+    if args.ret_prob:
+        save_image(model.image_normalize(mask, 0, 1000), output_filename)
+    else:
+        image[mask < 0.5] = image.min()
+        save_image(model.image_normalize(image, 0, 1000), output_filename)
 
 
 if __name__ == "__main__":
