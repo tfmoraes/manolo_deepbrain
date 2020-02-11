@@ -17,6 +17,7 @@ if args.use_gpu:
     os.environ["THEANO_FLAGS"] = "device=cuda0"
 
 import file_utils
+import h5py
 import model
 import nibabel as nb
 import numpy as np
@@ -136,6 +137,25 @@ def gen_all_patches(files, transformations, patch_size=SIZE, batch_size=BATCH_SI
     return files_transforms_patches
 
 
+def get_proportion(files_transforms_patches, patch_size=SIZE):
+    sum_bg = 0.0
+    sum_fg = 0.0
+    last_filename = ""
+    for image_filename, mask_filename, rot1, rot2, patch in files_transforms_patches:
+        if image_filename != last_filename:
+            mask = nb.load(str(mask_filename)).get_fdata()
+            mask = model.image_normalize(mask)
+            mask = apply_transform(mask, rot1, rot2)
+            last_filename = image_filename
+
+        _mask = get_image_patch(mask, patch, patch_size)
+        sum_bg += (_mask < 0.5).sum()
+        sum_fg += (_mask >= 0.5).sum()
+
+    return sum_bg/(sum_fg + sum_bg), sum_fg/(sum_bg + sum_fg)
+
+
+
 
 def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
     transformations = list(itertools.product(range(0, 360, 15), range(0, 360, 15)))
@@ -145,6 +165,7 @@ def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
     yield int(np.ceil(size / batch_size))
     images = np.zeros(shape=(batch_size, patch_size, patch_size, patch_size, 1), dtype=np.float32)
     masks = np.zeros_like(images)
+    yield get_proportion(files_transforms_patches, patch_size)
     ip = 0
     last_filename = ""
     for image_filename, mask_filename, rot1, rot2, patch in itertools.cycle(files_transforms_patches):
@@ -201,18 +222,42 @@ def load_models(files, batch_size=1):
                     ip = 0
 
 
-def train(kmodel, deepbrain_folder):
-    cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
-    nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
-    files = cc359_files  + nfbs_files
-    random.shuffle(files)
+def load_train_arrays(images, masks, batch_size=BATCH_SIZE):
+    while True:
+        for i in range(0, images.shape[0], batch_size):
+            yield images[i:i+batch_size], masks[i:i+batch_size]
 
-    training_files = files[: int(len(files) * 0.80)]
-    testing_files = files[int(len(files) * 0.80) :]
-    training_files_gen = gen_train_arrays(training_files, SIZE, BATCH_SIZE)
-    testing_files_gen = gen_train_arrays(testing_files, SIZE, BATCH_SIZE)
-    len_training_files = next(training_files_gen)
-    len_testing_files = next(testing_files_gen)
+
+def calc_proportions(masks):
+    sum_bg = 0.0
+    sum_fg = 0.0
+    for m in masks:
+        sum_bg += (m < 0.5).sum()
+        sum_fg += (m >= 0.5).sum()
+
+    return 1.0 - (sum_bg/masks.size), 1.0 - (sum_fg/masks.size)
+
+
+
+def train(kmodel, deepbrain_folder):
+    f_array = h5py.File("train_arrays.h5", "r")
+    images = f_array["images"]
+    masks = f_array["masks"]
+
+    f_test_array = h5py.File("test_arrays.h5", "r")
+    test_images = f_test_array["images"]
+    test_masks = f_test_array["masks"]
+
+
+    training_files_gen = load_train_arrays(images, masks, BATCH_SIZE)
+    testing_files_gen = load_train_arrays(test_images, test_masks, BATCH_SIZE)
+
+    len_training_files = images.shape[0]
+    len_testing_files = test_images.shape[0]
+
+    prop_bg, prop_fg = calc_proportions(masks)
+
+    print("proportion", prop_fg, prop_bg)
 
     best_model_file = pathlib.Path("weights/weights.h5").resolve()
     best_model = ModelCheckpoint(
@@ -227,6 +272,7 @@ def train(kmodel, deepbrain_folder):
             validation_data=testing_files_gen,
             validation_steps=len_testing_files,
             callbacks=[model.PlotLosses(), best_model],
+            class_weight=np.array((prop_bg, prop_fg)),
             initial_epoch=args.initial_epoch
         )
     else:
@@ -236,7 +282,8 @@ def train(kmodel, deepbrain_folder):
             epochs=EPOCHS,
             validation_data=testing_files_gen,
             validation_steps=len_testing_files,
-            callbacks=[model.PlotLosses(), best_model]
+            callbacks=[model.PlotLosses(), best_model],
+            class_weight=np.array((prop_bg, prop_fg))
         )
 
 
