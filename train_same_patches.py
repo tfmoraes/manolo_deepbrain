@@ -16,6 +16,7 @@ args, _ = parser.parse_known_args()
 if args.use_gpu:
     os.environ["THEANO_FLAGS"] = "device=cuda0"
 
+import keras
 import file_utils
 import h5py
 import model
@@ -238,24 +239,36 @@ def calc_proportions(masks):
     return 1.0 - (sum_bg/masks.size), 1.0 - (sum_fg/masks.size)
 
 
+class HDF5Sequence(keras.utils.Sequence):
+    def __init__(self, filename, batch_size):
+        self.f_array = h5py.File(filename, "r")
+        self.x = self.f_array["images"]
+        self.y = self.f_array["masks"]
+        self.batch_size = batch_size
+
+    def calc_proportions(self):
+        sum_bg = 0.0
+        sum_fg = 0.0
+        for m in self.y:
+            sum_bg += (m < 0.5).sum()
+            sum_fg += (m >= 0.5).sum()
+        return 1.0 - (sum_bg/self.y.size), 1.0 - (sum_fg/self.y.size)
+
+    def __len__(self):
+        return int(np.ceil(self.x.shape[0]/self.batch_size))
+
+    def __getitem__(self, idx):
+        batch_x = self.x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_y = self.y[idx * self.batch_size:(idx + 1) * self.batch_size]
+
+        return np.array([batch_x, batch_y])
+
+
 
 def train(kmodel, deepbrain_folder):
-    f_array = h5py.File("train_arrays.h5", "r")
-    images = f_array["images"]
-    masks = f_array["masks"]
-
-    f_test_array = h5py.File("test_arrays.h5", "r")
-    test_images = f_test_array["images"]
-    test_masks = f_test_array["masks"]
-
-
-    training_files_gen = load_train_arrays(images, masks, BATCH_SIZE)
-    testing_files_gen = load_train_arrays(test_images, test_masks, BATCH_SIZE)
-
-    len_training_files = images.shape[0]
-    len_testing_files = test_images.shape[0]
-
-    prop_bg, prop_fg = calc_proportions(masks)
+    training_files_gen = HDF5Sequence("train_arrays.h5", BATCH_SIZE)
+    testing_files_gen = HDF5Sequence("test_arrays.h5", BATCH_SIZE)
+    prop_bg, prop_fg = training_files_gen.calc_proportions()
 
     print("proportion", prop_fg, prop_bg)
 
@@ -278,12 +291,10 @@ def train(kmodel, deepbrain_folder):
     else:
         kmodel.fit_generator(
             training_files_gen,
-            steps_per_epoch=len_training_files,
             epochs=EPOCHS,
             validation_data=testing_files_gen,
-            validation_steps=len_testing_files,
             callbacks=[model.PlotLosses(), best_model],
-            class_weight=np.array((prop_bg, prop_fg))
+            class_weight=np.array((prop_bg, prop_fg)),
         )
 
 
