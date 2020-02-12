@@ -3,6 +3,7 @@ import os
 import pathlib
 import random
 import sys
+from multiprocessing import Pool
 
 import h5py
 
@@ -42,48 +43,59 @@ def get_image_patch(image, patch, patch_size):
     sub_image[0:sz, 0:sy, 0:sx] = _sub_image
     return sub_image
 
-def gen_all_patches(files, transformations, patch_size=SIZE, num_patches=NUM_PATCHES):
-    files_transforms_patches = []
-    for image_filename, mask_filename in files:
-        rot1, rot2 = random.choice(transformations)
-        sz, sy, sx = nb.load(str(image_filename)).shape
-        i_cuts = itertools.product(
-            range(0, sz, patch_size - OVERLAP),
-            range(0, sy, patch_size - OVERLAP),
-            range(0, sx, patch_size - OVERLAP),
-        )
-        patches = random.choices(list(i_cuts), k=num_patches)
-        for patch in patches:
-            files_transforms_patches.append((image_filename, mask_filename, rot1, rot2, patch))
+def gen_all_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
+    image_filename, mask_filename = files
+    image = nb.load(str(image_filename)).get_fdata()
+    mask = nb.load(str(mask_filename)).get_fdata()
+    transformations = list(itertools.product(range(0, 360, 15), range(0, 360, 15)))
+    rot1, rot2 = random.choice(transformations)
+    sz, sy, sx = image.shape
+    patches = list(itertools.product(
+        range(0, sz, patch_size - OVERLAP),
+        range(0, sy, patch_size - OVERLAP),
+        range(0, sx, patch_size - OVERLAP),
+    ))
+    random.shuffle(patches)
 
-    return files_transforms_patches
+    image = apply_transform(image, rot1, rot2)
+    image = model.image_normalize(image)
+
+    mask = apply_transform(mask, rot1, rot2)
+    mask = model.image_normalize(mask)
+
+    images = []
+    masks = []
+    for patch in patches:
+        sub_image = get_image_patch(image, patch, patch_size)
+        sub_mask = get_image_patch(mask, patch, patch_size)
+        if sub_mask.any():
+            images.append(sub_image)
+            masks.append(sub_mask)
+        if len(masks) == num_patches:
+            break
+
+    for patch in patches:
+        sub_image = get_image_patch(image, patch, patch_size)
+        sub_mask = get_image_patch(mask, patch, patch_size)
+        if len(masks) == num_patches:
+            break
+
+    return images, masks
 
 
 def gen_train_array(files, filename, patch_size=SIZE, overlap=OVERLAP, num_patches=NUM_PATCHES):
-    transformations = list(itertools.product(range(0, 360, 15), range(0, 360, 15)))
-    files_transforms_patches = gen_all_patches(files, transformations, patch_size, NUM_PATCHES)
-    size = len(files_transforms_patches)
-
+    size = len(files) * num_patches
     with h5py.File(filename, "w") as f_array:
         images = f_array.create_dataset("images", (size, patch_size, patch_size, patch_size, 1), dtype="float32")
         masks = f_array.create_dataset("masks", (size, patch_size, patch_size, patch_size, 1), dtype="float32")
-
-        last_filename = ""
-        ip = 0
-        for image_filename, mask_filename, rot1, rot2, patch in files_transforms_patches:
-            if image_filename != last_filename:
-                image = nb.load(str(image_filename)).get_fdata()
-                mask = nb.load(str(mask_filename)).get_fdata()
-                image = model.image_normalize(image)
-                mask = model.image_normalize(mask)
-                image = apply_transform(image, rot1, rot2)
-                mask = apply_transform(mask, rot1, rot2)
-                last_filename = image_filename
-                print(last_filename)
-
-            images[ip] = get_image_patch(image, patch, patch_size).reshape(patch_size, patch_size, patch_size, 1)
-            masks[ip] = get_image_patch(mask, patch, patch_size).reshape(patch_size, patch_size, patch_size, 1)
-            ip+= 1
+        with Pool() as pool:
+            ip = 0
+            for sub_images in pool.imap(gen_all_patches, files):
+                for sub_image, sub_mask in zip(*sub_images):
+                    images[ip] = sub_image.reshape(patch_size, patch_size, patch_size, 1)
+                    masks[ip] = sub_mask.reshape(patch_size, patch_size, patch_size, 1)
+                    ip+= 1
+                    print(ip, size)
 
 
 
