@@ -74,11 +74,16 @@ def gen_all_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
         if len(masks) == num_patches:
             break
 
-    for patch in patches:
-        sub_image = get_image_patch(image, patch, patch_size)
-        sub_mask = get_image_patch(mask, patch, patch_size)
-        if len(masks) == num_patches:
-            break
+    if len(masks) < num_patches:
+        print("not sufficient")
+        for patch in patches:
+            sub_image = get_image_patch(image, patch, patch_size)
+            sub_mask = get_image_patch(mask, patch, patch_size)
+            if not sub_mask.any():
+                images.append(sub_image)
+                masks.append(sub_mask)
+            if len(masks) == num_patches:
+                break
 
     return images, masks
 
