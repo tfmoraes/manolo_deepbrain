@@ -23,10 +23,8 @@ import model
 from constants import OVERLAP, SIZE
 
 
-def save_image(image, filename, spacing=(1.0, 1.0, 1.0)):
-    image_nifti = nb.Nifti1Image(image, None)
-    image_nifti.header.set_zooms(spacing)
-    image_nifti.header.set_dim_info(slice=0)
+def save_image(image, filename, affine):
+    image_nifti = nb.Nifti1Image(image, affine)
     nb.save(image_nifti, filename)
 
 
@@ -34,7 +32,9 @@ def main():
     image_filename = args.input
     output_filename = args.output
 
-    image = nb.load(image_filename).get_fdata()
+    image = nb.load(image_filename)
+    affine = image.affine
+    image = image.get_fdata()
     image = model.image_normalize(image)
     #  image = image.swapaxes(2, 0)
     mask = np.zeros_like(image, dtype="float32")
@@ -81,10 +81,10 @@ def main():
     mask = mask / sums
     print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
     if args.ret_prob:
-        save_image(model.image_normalize(mask, 0, 1000), output_filename)
+        save_image(model.image_normalize(mask, 0, 1000), output_filename, affine)
     else:
         image[mask < 0.5] = image.min()
-        save_image(model.image_normalize(image, 0, 1000), output_filename)
+        save_image(model.image_normalize(image, 0, 1000), output_filename, affine)
 
 
 if __name__ == "__main__":
