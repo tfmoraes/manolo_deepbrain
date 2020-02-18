@@ -10,7 +10,7 @@ os.environ["KERAS_BACKEND"] = "theano"
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--gpu", action="store_true", help="use gpu", dest="use_gpu")
-parser.add_argument("-c", "--continue", type=int, dest="initial_epoch")
+parser.add_argument("-c", "--continue", action="store_true", dest="continue_train")
 args, _ = parser.parse_known_args()
 
 if args.use_gpu:
@@ -277,31 +277,32 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
-    if args.initial_epoch:
+    plot_callback = model.PlotLosses(args.continue_train)
+    callbacks = [plot_callback, best_model]
+    if args.continue_train:
+        kmodel.load_weights("weights/weights.h5")
+        initial_epoch = plot_callback.get_number_trains()
+        print("starting from", initial_epoch)
         kmodel.fit_generator(
             training_files_gen,
-            steps_per_epoch=len_training_files,
             epochs=EPOCHS,
             validation_data=testing_files_gen,
-            validation_steps=len_testing_files,
-            callbacks=[model.PlotLosses(), best_model],
+            callbacks=callbacks,
             class_weight=np.array((prop_bg, prop_fg)),
-            initial_epoch=args.initial_epoch
+            initial_epoch=initial_epoch
         )
     else:
         kmodel.fit_generator(
             training_files_gen,
             epochs=EPOCHS,
             validation_data=testing_files_gen,
-            callbacks=[model.PlotLosses(), best_model],
+            callbacks=callbacks,
             class_weight=np.array((prop_bg, prop_fg)),
         )
 
 
 def main():
     kmodel = model.generate_model()
-    if args.initial_epoch:
-        kmodel.load_weights("weights/weights.h5")
     train(kmodel, pathlib.Path("datasets").resolve())
     model.save_model(kmodel)
 

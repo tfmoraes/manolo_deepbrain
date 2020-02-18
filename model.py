@@ -2,6 +2,7 @@ import pathlib
 import sys
 import itertools
 import datetime
+import json
 
 from constants import SIZE
 import pylab as plt
@@ -16,44 +17,74 @@ from skimage.transform import resize
 
 #  from keras.backend.control_flow_ops.array_ops import placeholder_with_default
 
+
 class PlotLosses(keras.callbacks.Callback):
-    def on_train_begin(self, logs={}):
+    def __init__(self, continue_train=False):
+        self.val_dice_coef = []
+        self.dice_coef = []
         self.i = 0
         self.x = []
         self.losses = []
         self.val_losses = []
-       
-        self.val_dice_coef = []
-        self.dice_coef = []
-        
-        
-        self.fig = plt.figure()
+        self.accuracies = []
+        self.val_accuracies = []
         self.logs = []
+        if continue_train:
+            try:
+                with open("results.json", "r") as f:
+                    logs = json.load(f)
+                    self.logs = logs
+                    self.losses = logs["losses"]
+                    self.val_losses = logs["val_losses"]
+                    self.accuracies = logs["accuracy"]
+                    self.val_accuracies = logs["val_accuracy"]
+                    self.i = len(self.losses)
+                    self.x = list(range(self.i))
+            except Exception as e:
+                print("Not possible to continue. Starting from 0", e)
 
-        plt.plot(self.x, self.losses, color="steelblue", label="train")
-        plt.plot(self.x, self.val_losses, color="orange", label="test")
-
-        plt.ylabel('loss')
-        plt.xlabel('epoch')
-        
-        plt.title('model loss')
-        plt.legend(['train', 'test'], loc='upper left')
+    def get_number_trains(self):
+        return self.i - 1
 
     def on_epoch_end(self, epoch, logs={}):
-                                                                                         
-        self.logs.append(logs)
+        print(logs)
+        #  self.logs.append(logs)
 
         self.x.append(self.i)
 
-        self.losses.append(logs.get('loss'))
-        self.val_losses.append(logs.get('val_loss'))
-        self.i += 1                                                                                                                            
-        
-        plt.plot(self.x, self.losses, color="steelblue")
-        plt.plot(self.x, self.val_losses, color="orange")
+        self.losses.append(float(logs.get("loss")))
+        self.val_losses.append(float(logs.get("val_loss")))
+        self.accuracies.append(float(logs.get("acc")))
+        self.val_accuracies.append(float(logs.get("val_acc")))
+        self.i += 1
 
+        plt.title("model loss")
+        plt.plot(self.x, self.losses, color="steelblue", label="train")
+        plt.plot(self.x, self.val_losses, color="orange", label="test")
+        plt.ylabel("loss")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
         plt.tight_layout()
-        plt.gcf().savefig('./model_loss.png')
+        plt.gcf().savefig("./model_loss.png")
+        plt.clf()
+
+        plt.title("model accuracy")
+        plt.plot(self.x, self.accuracies, color="steelblue", label="train")
+        plt.plot(self.x, self.val_accuracies, color="orange", label="test")
+        plt.ylabel("accuracy")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
+        plt.tight_layout()
+        plt.gcf().savefig("./model_accuracy.png")
+        plt.clf()
+
+        with open("results.json", "w") as f:
+            json.dump({
+                'losses': self.losses,
+                'val_losses': self.val_losses,
+                'accuracy': self.accuracies,
+                'val_accuracy': self.val_accuracies
+            }, f)
 
 
 def image_normalize(image, min_=0.0, max_=1.0):
@@ -84,7 +115,9 @@ def load_models(folder):
             image = nb.load(str(original_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
 
-            image = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
+            image = resize(
+                image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
+            )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
 
             image = image_normalize(image)
@@ -92,11 +125,15 @@ def load_models(folder):
 
             print(image.min(), image.max(), mask.min(), mask.max())
 
-            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").reshape(1, SIZE, SIZE, SIZE, 1)
+            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype(
+                "float32"
+            ).reshape(1, SIZE, SIZE, SIZE, 1)
 
             for i, j in itertools.combinations(range(3), 2):
                 print(i, j)
-                yield image.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
+                yield image.astype("float32").swapaxes(i, j).reshape(
+                    1, SIZE, SIZE, SIZE, 1
+                ), mask.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
 
 
 def load_models2(folder):
@@ -113,7 +150,9 @@ def load_models2(folder):
             image = nb.load(str(original_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
 
-            image = resize(image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
+            image = resize(
+                image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
+            )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
 
             image = image_normalize(image)
@@ -121,11 +160,15 @@ def load_models2(folder):
 
             print(image.min(), image.max(), mask.min(), mask.max())
 
-            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").reshape(1, SIZE, SIZE, SIZE, 1)
+            yield image.astype("float32").reshape(1, SIZE, SIZE, SIZE, 1), mask.astype(
+                "float32"
+            ).reshape(1, SIZE, SIZE, SIZE, 1)
 
             for i, j in itertools.combinations(range(3), 2):
                 print(i, j)
-                yield image.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1), mask.astype( "float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
+                yield image.astype("float32").swapaxes(i, j).reshape(
+                    1, SIZE, SIZE, SIZE, 1
+                ), mask.astype("float32").swapaxes(i, j).reshape(1, SIZE, SIZE, SIZE, 1)
 
 
 def generate_model():
@@ -258,8 +301,7 @@ def generate_model():
     out = layers.Dense(1, activation="sigmoid")(out)
 
     model = keras.models.Model(input_, out)
-    model.compile("adam", loss="binary_crossentropy", metrics=['accuracy'])
-    
+    model.compile("adam", loss="binary_crossentropy", metrics=["accuracy"])
 
     return model
 
@@ -267,7 +309,14 @@ def generate_model():
 def train(model, deepbrain_folder):
     gen_model = load_models(deepbrain_folder)
     val_model = load_models2(deepbrain_folder)
-    model.fit_generator(gen_model, steps_per_epoch=10 * 4, epochs=200,  validation_data=val_model, validation_steps=40*4, callbacks=[PlotLosses()],)
+    model.fit_generator(
+        gen_model,
+        steps_per_epoch=10 * 4,
+        epochs=200,
+        validation_data=val_model,
+        validation_steps=40 * 4,
+        callbacks=[PlotLosses()],
+    )
 
 
 def save_model(model):
