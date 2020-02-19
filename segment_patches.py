@@ -1,8 +1,12 @@
 import argparse
+import functools
 import itertools
 import os
+from multiprocessing import Pool
 
-os.environ["KERAS_BACKEND"] = "theano"
+import nibabel as nb
+import numpy as np
+from skimage.transform import resize
 
 parser = argparse.ArgumentParser()
 
@@ -12,12 +16,10 @@ parser.add_argument("-i", "--input", help="Input mri image")
 parser.add_argument("-o", "--output", help="Output mri image")
 args, _ = parser.parse_known_args()
 
+os.environ["KERAS_BACKEND"] = "theano"
 if args.use_gpu:
+    print("gpu")
     os.environ["THEANO_FLAGS"] = "device=cuda0"
-
-import nibabel as nb
-import numpy as np
-from skimage.transform import resize
 
 import model
 from constants import OVERLAP, SIZE
@@ -54,19 +56,29 @@ def gen_patches(image, patch_size, overlap):
         ey = iy + sy
         ex = ix + sx
 
-        yield ((iz, ez), (iy, ey), (ix, ex)), sub_image
+        yield sub_image, ((iz, ez), (iy, ey), (ix, ex))
 
 
 
 def segment_on_cpu(image, nn_model):
-    pass
+    mask = np.zeros_like(image, dtype="float32")
+    sums = np.zeros_like(image)
+    for sub_image, patch in gen_patches(image, SIZE, OVERLAP):
+        (iz, ez), (iy, ey), (ix, ex) = patch
+        sub_mask = predict_patch(sub_image, patch, nn_model, SIZE)
+        print(sub_mask.min(), sub_mask.max())
+        mask[iz:ez, iy:ey, ix:ex] += sub_mask
+        sums[iz:ez, iy:ey, ix:ex] += 1
+
+    return mask / sums
 
 def segment_on_gpu(image, nn_model):
     mask = np.zeros_like(image, dtype="float32")
     sums = np.zeros_like(image)
-    for patch, sub_image in gen_patches(image, SIZE, OVERLAP):
+    for sub_image, patch in gen_patches(image, SIZE, OVERLAP):
         (iz, ez), (iy, ey), (ix, ex) = patch
         sub_mask = predict_patch(sub_image, patch, nn_model, SIZE)
+        print(sub_mask.min(), sub_mask.max())
         mask[iz:ez, iy:ey, ix:ex] += sub_mask
         sums[iz:ez, iy:ey, ix:ex] += 1
 
@@ -82,9 +94,14 @@ def main():
     affine = image.affine
     image = image.get_fdata()
     image = image_normalize(image)
+
     nn_model = model.load_model()
 
-    mask = segment_on_gpu(image, nn_model)
+    if args.use_gpu:
+        mask = segment_on_gpu(image, nn_model)
+    else:
+        mask = segment_on_cpu(image, nn_model)
+
     if args.ret_prob:
         save_image(image_normalize(mask, 0, 1000), output_filename, affine)
     else:
