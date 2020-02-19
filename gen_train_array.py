@@ -8,25 +8,13 @@ from multiprocessing import Pool
 import h5py
 
 import file_utils
-import model
 import nibabel as nb
 import numpy as np
 from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
 from keras.callbacks import ModelCheckpoint
 from scipy.ndimage import rotate
 from skimage.transform import resize
-
-
-def apply_transform(image, rot1, rot2):
-    if rot1 > 0:
-        image = rotate(
-            image, angle=rot1, axes=(1, 0), output=np.float32, order=0, prefilter=False
-        )
-    if rot2 > 0:
-        image = rotate(
-            image, angle=rot2, axes=(2, 1), output=np.float32, order=0, prefilter=False
-        )
-    return image
+from utils import apply_transform, image_normalize, PlotLosses
 
 
 def get_image_patch(image, patch, patch_size):
@@ -58,10 +46,10 @@ def gen_all_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
     random.shuffle(patches)
 
     image = apply_transform(image, rot1, rot2)
-    image = model.image_normalize(image)
+    image = image_normalize(image)
 
     mask = apply_transform(mask, rot1, rot2)
-    mask = model.image_normalize(mask)
+    mask = image_normalize(mask)
 
     images = []
     masks = []

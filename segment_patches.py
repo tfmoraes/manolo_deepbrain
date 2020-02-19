@@ -21,11 +21,57 @@ from skimage.transform import resize
 
 import model
 from constants import OVERLAP, SIZE
+from utils import image_normalize
 
 
 def save_image(image, filename, affine):
     image_nifti = nb.Nifti1Image(image, affine)
     nb.save(image_nifti, filename)
+
+
+def predict_patch(sub_image, patch, nn_model, patch_size=SIZE):
+    (iz, ez), (iy, ey), (ix, ex) = patch
+    sub_mask = nn_model.predict(sub_image.reshape(1, patch_size, patch_size, patch_size, 1))
+    return sub_mask.reshape(patch_size, patch_size, patch_size)[0:ez-iz, 0:ey-iy, 0:ex-ix]
+
+
+def gen_patches(image, patch_size, overlap):
+    sz, sy, sx = image.shape
+    i_cuts = itertools.product(
+        range(0, sz, patch_size - OVERLAP),
+        range(0, sy, patch_size - OVERLAP),
+        range(0, sx, patch_size - OVERLAP),
+    )
+    sub_image = np.empty(shape=(patch_size, patch_size, patch_size), dtype="float32")
+    for iz, iy, ix in i_cuts:
+        sub_image[:] = 0
+        _sub_image = image[
+            iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
+        ]
+        sz, sy, sx = _sub_image.shape
+        sub_image[0:sz, 0:sy, 0:sx] = _sub_image
+        ez = iz + sz
+        ey = iy + sy
+        ex = ix + sx
+
+        yield ((iz, ez), (iy, ey), (ix, ex)), sub_image
+
+
+
+def segment_on_cpu(image, nn_model):
+    pass
+
+def segment_on_gpu(image, nn_model):
+    mask = np.zeros_like(image, dtype="float32")
+    sums = np.zeros_like(image)
+    for patch, sub_image in gen_patches(image, SIZE, OVERLAP):
+        (iz, ez), (iy, ey), (ix, ex) = patch
+        sub_mask = predict_patch(sub_image, patch, nn_model, SIZE)
+        mask[iz:ez, iy:ey, ix:ex] += sub_mask
+        sums[iz:ez, iy:ey, ix:ex] += 1
+
+    return mask / sums
+
 
 
 def main():
@@ -35,56 +81,15 @@ def main():
     image = nb.load(image_filename)
     affine = image.affine
     image = image.get_fdata()
-    image = model.image_normalize(image)
-    #  image = image.swapaxes(2, 0)
-    mask = np.zeros_like(image, dtype="float32")
+    image = image_normalize(image)
     nn_model = model.load_model()
 
-    patch_size = SIZE
-    sz, sy, sx = image.shape
-    i_cuts = itertools.product(
-        range(0, sz, patch_size - OVERLAP),
-        range(0, sy, patch_size - OVERLAP),
-        range(0, sx, patch_size - OVERLAP),
-    )
-
-    sub_image = np.empty(shape=(patch_size, patch_size, patch_size), dtype="float32")
-    sub_mask = np.empty_like(sub_image)
-    sums = np.zeros_like(image)
-    for iz, iy, ix in i_cuts:
-        sub_image[:] = 0
-        sub_mask[:] = 0
-        _sub_image = image[
-            iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
-        ]
-
-        _sub_mask = mask[
-            iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size
-        ]
-
-        sums[iz : iz + patch_size, iy : iy + patch_size, ix : ix + patch_size] += 1
-
-        sz, sy, sx = _sub_image.shape
-
-        sub_image[0:sz, 0:sy, 0:sx] = _sub_image
-        #  sub_mask[0:sz, 0:sy, 0:sx] = _sub_mask
-
-        sub_mask[:] = nn_model.predict(
-            sub_image.reshape(1, patch_size, patch_size, patch_size, 1)
-        ).reshape(sub_mask.shape)
-
-        print(iz, iy, ix, sub_mask.min(), sub_mask.max())
-
-        _sub_mask += sub_mask[0:sz, 0:sy, 0:sx]
-
-    print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
-    mask = mask / sums
-    print("min_max", mask.min(), mask.max(), sums.min(), sums.max())
+    mask = segment_on_gpu(image, nn_model)
     if args.ret_prob:
-        save_image(model.image_normalize(mask, 0, 1000), output_filename, affine)
+        save_image(image_normalize(mask, 0, 1000), output_filename, affine)
     else:
         image[mask < 0.5] = image.min()
-        save_image(model.image_normalize(image, 0, 1000), output_filename, affine)
+        save_image(image_normalize(image, 0, 1000), output_filename, affine)
 
 
 if __name__ == "__main__":

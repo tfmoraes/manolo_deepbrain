@@ -18,28 +18,16 @@ if args.use_gpu:
 
 import keras
 import file_utils
+
 import h5py
 import model
 import nibabel as nb
 import numpy as np
 from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
 from keras.callbacks import ModelCheckpoint
-from scipy.ndimage import rotate
 from skimage.transform import resize
+from utils import apply_transform, image_normalize, PlotLosses
 
-
-
-
-def apply_transform(image, rot1, rot2):
-    if rot1 > 0:
-        image = rotate(
-            image, angle=rot1, axes=(1, 0), output=np.float32, order=0, prefilter=False
-        )
-    if rot2 > 0:
-        image = rotate(
-            image, angle=rot2, axes=(2, 1), output=np.float32, order=0, prefilter=False
-        )
-    return image
 
 
 def get_epoch_size(files, patch_size=SIZE):
@@ -109,8 +97,8 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
     for image_filename, mask_filename in files:
         image = nb.load(str(image_filename)).get_fdata()
         mask = nb.load(str(mask_filename)).get_fdata()
-        image = model.image_normalize(image)
-        mask = model.image_normalize(mask)
+        image = image_normalize(image)
+        mask = image_normalize(mask)
         rot1, rot2 = random.choice(transformations)
         t_image = apply_transform(image, rot1, rot2)
         t_mask = apply_transform(mask, rot1, rot2)
@@ -145,7 +133,7 @@ def get_proportion(files_transforms_patches, patch_size=SIZE):
     for image_filename, mask_filename, rot1, rot2, patch in files_transforms_patches:
         if image_filename != last_filename:
             mask = nb.load(str(mask_filename)).get_fdata()
-            mask = model.image_normalize(mask)
+            mask = image_normalize(mask)
             mask = apply_transform(mask, rot1, rot2)
             last_filename = image_filename
 
@@ -173,8 +161,8 @@ def gen_train_arrays(files, patch_size=SIZE, batch_size=BATCH_SIZE):
         if image_filename != last_filename:
             image = nb.load(str(image_filename)).get_fdata()
             mask = nb.load(str(mask_filename)).get_fdata()
-            image = model.image_normalize(image)
-            mask = model.image_normalize(mask)
+            image = image_normalize(image)
+            mask = image_normalize(mask)
             image = apply_transform(image, rot1, rot2)
             mask = apply_transform(mask, rot1, rot2)
             last_filename = image_filename
@@ -206,8 +194,8 @@ def load_models(files, batch_size=1):
                 image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
             )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
-            image = model.image_normalize(image)
-            mask = model.image_normalize(mask)
+            image = image_normalize(image)
+            mask = image_normalize(mask)
             for rot1, rot2 in transformations:
                 t_image = apply_transform(image, rot1, rot2)
                 t_mask = apply_transform(mask, rot1, rot2)
@@ -277,7 +265,7 @@ def train(kmodel, deepbrain_folder):
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
-    plot_callback = model.PlotLosses(args.continue_train)
+    plot_callback = PlotLosses(args.continue_train)
     callbacks = [plot_callback, best_model]
     if args.continue_train:
         kmodel.load_weights("weights/weights.h5")
