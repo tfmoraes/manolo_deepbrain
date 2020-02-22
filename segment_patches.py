@@ -8,22 +8,34 @@ import nibabel as nb
 import numpy as np
 from skimage.transform import resize
 
+from constants import OVERLAP, SIZE
+from utils import image_normalize, get_plaidml_devices
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--gpu", action="store_true", help="use gpu", dest="use_gpu")
+parser.add_argument("-b", "--backend", help="Backend", dest="backend")
 parser.add_argument("-p", action="store_true", help="return probability", dest="ret_prob")
 parser.add_argument("-i", "--input", help="Input mri image")
 parser.add_argument("-o", "--output", help="Output mri image")
 args, _ = parser.parse_known_args()
 
-os.environ["KERAS_BACKEND"] = "theano"
+if args.backend == "plaidml":
+    os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
+else:
+    os.environ["KERAS_BACKEND"] = "theano"
+
 if args.use_gpu:
-    print("gpu")
+    if args.backend == 'plaidml':
+        device = get_plaidml_devices(True)
+        os.environ["PLAIDML_DEVICE_IDS"] = device.id.decode("utf8")
     os.environ["THEANO_FLAGS"] = "device=cuda0"
+else:
+    if args.backend == 'plaidml':
+        device = get_plaidml_devices(False)
+        os.environ["PLAIDML_DEVICE_IDS"] = device.id.decode("utf8")
 
 import model
-from constants import OVERLAP, SIZE
-from utils import image_normalize
 
 
 def save_image(image, filename, affine):

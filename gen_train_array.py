@@ -11,10 +11,9 @@ import file_utils
 import nibabel as nb
 import numpy as np
 from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
-from keras.callbacks import ModelCheckpoint
 from scipy.ndimage import rotate
 from skimage.transform import resize
-from utils import apply_transform, image_normalize, PlotLosses
+from utils import apply_transform, image_normalize
 
 
 def get_image_patch(image, patch, patch_size):

@@ -36,8 +36,10 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 ENV NVIDIA_REQUIRE_CUDA "cuda>=10.2 brand=tesla,driver>=384,driver<385 brand=tesla,driver>=396,driver<397 brand=tesla,driver>=410,driver<411 brand=tesla,driver>=418,driver<419"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential python3-keras python3-pandas python3-nibabel python3-pygpu python3-skimage libgpuarray-dev libnvrtc10.1 libcublas-dev libnccl-dev libnccl2 libcudnn7-dev && \
+        build-essential python3-all-dev python3-setuptools python3-distutils python3-wheel python3-pip libgpuarray-dev libopenblas-dev  cuda-10-2 graphviz libnvrtc10.1 libcublas-dev libnccl-dev libnccl2 libcudnn7-dev && \
     rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/lib/x86_64-linux-gnu/libnvrtc.so.10.1 /usr/lib/x86_64-linux-gnu/libnvrtc.so
 RUN ln -s /usr/lib/x86_64-linux-gnu/libnvrtc-builtins.so.10.1 /usr/lib/x86_64-linux-gnu/libnvrtc-builtins.so
+
+RUN pip3 install Theano plaidml-keras plaidbench numpy scipy scikit-image nibabel matplotlib pycuda pyopencl

@@ -4,30 +4,112 @@ import os
 import pathlib
 import random
 import sys
+import json
 
-os.environ["KERAS_BACKEND"] = "theano"
+import h5py
+import nibabel as nb
+import numpy as np
+import pylab as plt
+import file_utils
+from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
+from utils import apply_transform, image_normalize, get_plaidml_devices
+from skimage.transform import resize
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--gpu", action="store_true", help="use gpu", dest="use_gpu")
 parser.add_argument("-c", "--continue", action="store_true", dest="continue_train")
+parser.add_argument("-b", "--backend", help="Backend", dest="backend")
 args, _ = parser.parse_known_args()
 
+if args.backend == "plaidml":
+    os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
+else:
+    os.environ["KERAS_BACKEND"] = "theano"
+
 if args.use_gpu:
+    if args.backend == 'plaidml':
+        device = get_plaidml_devices(True)
+        os.environ["PLAIDML_DEVICE_IDS"] = device.id.decode("utf8")
     os.environ["THEANO_FLAGS"] = "device=cuda0"
+else:
+    if args.backend == 'plaidml':
+        device = get_plaidml_devices(False)
+        os.environ["PLAIDML_DEVICE_IDS"] = device.id.decode("utf8")
+
 
 import keras
-import file_utils
-
-import h5py
 import model
-import nibabel as nb
-import numpy as np
-from constants import BATCH_SIZE, EPOCHS, OVERLAP, SIZE, NUM_PATCHES
 from keras.callbacks import ModelCheckpoint
-from skimage.transform import resize
-from utils import apply_transform, image_normalize, PlotLosses
 
+
+class PlotLosses(keras.callbacks.Callback):
+    def __init__(self, continue_train=False):
+        self.val_dice_coef = []
+        self.dice_coef = []
+        self.i = 0
+        self.x = []
+        self.losses = []
+        self.val_losses = []
+        self.accuracies = []
+        self.val_accuracies = []
+        self.logs = []
+        if continue_train:
+            try:
+                with open("results.json", "r") as f:
+                    logs = json.load(f)
+                    self.logs = logs
+                    self.losses = logs["losses"]
+                    self.val_losses = logs["val_losses"]
+                    self.accuracies = logs["accuracy"]
+                    self.val_accuracies = logs["val_accuracy"]
+                    self.i = len(self.losses)
+                    self.x = list(range(self.i))
+            except Exception as e:
+                print("Not possible to continue. Starting from 0", e)
+
+    def get_number_trains(self):
+        return self.i - 1
+
+    def on_epoch_end(self, epoch, logs={}):
+        print(logs)
+        #  self.logs.append(logs)
+
+        self.x.append(self.i)
+
+        self.losses.append(float(logs.get("loss")))
+        self.val_losses.append(float(logs.get("val_loss")))
+        self.accuracies.append(float(logs.get("acc")))
+        self.val_accuracies.append(float(logs.get("val_acc")))
+        self.i += 1
+
+        plt.title("model loss")
+        plt.plot(self.x, self.losses, color="steelblue", label="train")
+        plt.plot(self.x, self.val_losses, color="orange", label="test")
+        plt.ylabel("loss")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
+        plt.tight_layout()
+        plt.gcf().savefig("./model_loss.png")
+        plt.clf()
+
+        plt.title("model accuracy")
+        plt.plot(self.x, self.accuracies, color="steelblue", label="train")
+        plt.plot(self.x, self.val_accuracies, color="orange", label="test")
+        plt.ylabel("accuracy")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
+        plt.tight_layout()
+        plt.gcf().savefig("./model_accuracy.png")
+        plt.clf()
+
+        with open("results.json", "w") as f:
+            json.dump({
+                'losses': self.losses,
+                'val_losses': self.val_losses,
+                'accuracy': self.accuracies,
+                'val_accuracy': self.val_accuracies
+            }, f)
 
 
 def get_epoch_size(files, patch_size=SIZE):
