@@ -15,6 +15,19 @@ def apply_transform(image, rot1, rot2):
     return image
 
 
+def get_LUT_value(data, window, level):
+    shape = data.shape
+    data_ = data.ravel()
+    data = np.piecewise(
+        data_,
+        [
+            data_ <= (level - 0.5 - (window - 1) / 2),
+            data_ > (level - 0.5 + (window - 1) / 2),
+        ],
+        [0, 255, lambda data_: ((data_ - (level - 0.5)) / (window - 1) + 0.5) * (255)],
+    )
+    data.shape = shape
+    return data
 
 
 def image_normalize(image, min_=0.0, max_=1.0):
@@ -24,17 +37,18 @@ def image_normalize(image, min_=0.0, max_=1.0):
 
 def get_plaidml_devices(gpu=False):
     import plaidml
+
     ctx = plaidml.Context()
     plaidml.settings._setup_for_test(plaidml.settings.user_settings)
     plaidml.settings.experimental = True
     devices, _ = plaidml.devices(ctx, limit=100, return_all=True)
     if gpu:
         for device in devices:
-            if b'cuda' in device.description.lower():
+            if b"cuda" in device.description.lower():
                 return device
         for device in devices:
-            if b'opencl' in device.description.lower():
+            if b"opencl" in device.description.lower():
                 return device
     for device in devices:
-        if b'llvm' in device.description.lower():
+        if b"llvm" in device.description.lower():
             return device

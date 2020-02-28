@@ -6,10 +6,11 @@ from multiprocessing import Pool
 
 import nibabel as nb
 import numpy as np
+import matplotlib.pyplot as plt
 from skimage.transform import resize
 
 from constants import OVERLAP, SIZE
-from utils import image_normalize, get_plaidml_devices
+from utils import image_normalize, get_plaidml_devices, get_LUT_value
 
 parser = argparse.ArgumentParser()
 
@@ -18,6 +19,7 @@ parser.add_argument("-b", "--backend", help="Backend", dest="backend")
 parser.add_argument("-p", action="store_true", help="return probability", dest="ret_prob")
 parser.add_argument("-i", "--input", help="Input mri image")
 parser.add_argument("-o", "--output", help="Output mri image")
+parser.add_argument("-w", "--wwwl", help="Windows Width & Window level", dest="wwwl")
 args, _ = parser.parse_known_args()
 
 if args.backend == "plaidml":
@@ -105,8 +107,13 @@ def main():
     image = nb.load(image_filename)
     affine = image.affine
     image = image.get_fdata()
-    image = image_normalize(image)
 
+    if args.wwwl:
+        ww, wl = [int(i) for i in args.wwwl.split(",")]
+        print("Applying ww&wl", ww, wl)
+        image = get_LUT_value(image, ww, wl)
+
+    image = image_normalize(image)
     nn_model = model.load_model()
 
     if args.use_gpu:
