@@ -26,6 +26,7 @@ import keras
 import nibabel as nb
 import numpy as np
 from constants import EPOCHS, SIZE, BATCH_SIZE, OVERLAP
+from utils import apply_transform, image_normalize
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from skimage.transform import resize
 from scipy.ndimage import rotate
@@ -45,16 +46,74 @@ config.gpu_options.visible_device_list = str(hvd.local_rank())
 K.set_session(tf.Session(config=config))
 
 
-def apply_transform(image, rot1, rot2):
-    if rot1 > 0:
-        image = rotate(
-            image, angle=rot1, axes=(1, 0), output=np.float32, order=0, prefilter=False
-        )
-    if rot2 > 0:
-        image = rotate(
-            image, angle=rot2, axes=(2, 1), output=np.float32, order=0, prefilter=False
-        )
-    return image
+class PlotLosses(keras.callbacks.Callback):
+    def __init__(self, continue_train=False):
+        self.val_dice_coef = []
+        self.dice_coef = []
+        self.i = 0
+        self.x = []
+        self.losses = []
+        self.val_losses = []
+        self.accuracies = []
+        self.val_accuracies = []
+        self.logs = []
+        if continue_train:
+            try:
+                with open("results.json", "r") as f:
+                    logs = json.load(f)
+                    self.logs = logs
+                    self.losses = logs["losses"]
+                    self.val_losses = logs["val_losses"]
+                    self.accuracies = logs["accuracy"]
+                    self.val_accuracies = logs["val_accuracy"]
+                    self.i = len(self.losses)
+                    self.x = list(range(self.i))
+            except Exception as e:
+                print("Not possible to continue. Starting from 0", e)
+
+    def get_number_trains(self):
+        return self.i - 1
+
+    def on_epoch_end(self, epoch, logs={}):
+        print(logs)
+        #  self.logs.append(logs)
+
+        self.x.append(self.i)
+
+        self.losses.append(float(logs.get("loss")))
+        self.val_losses.append(float(logs.get("val_loss")))
+        self.accuracies.append(float(logs.get("acc")))
+        self.val_accuracies.append(float(logs.get("val_acc")))
+        self.i += 1
+
+        plt.title("model loss")
+        plt.plot(self.x, self.losses, color="steelblue", label="train")
+        plt.plot(self.x, self.val_losses, color="orange", label="test")
+        plt.ylabel("loss")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
+        plt.tight_layout()
+        plt.gcf().savefig("./model_loss.png")
+        plt.clf()
+
+        plt.title("model accuracy")
+        plt.plot(self.x, self.accuracies, color="steelblue", label="train")
+        plt.plot(self.x, self.val_accuracies, color="orange", label="test")
+        plt.ylabel("accuracy")
+        plt.xlabel("epoch")
+        plt.legend(["train", "test"], loc="upper left")
+        plt.tight_layout()
+        plt.gcf().savefig("./model_accuracy.png")
+        plt.clf()
+
+        with open("results.json", "w") as f:
+            json.dump({
+                'losses': self.losses,
+                'val_losses': self.val_losses,
+                'accuracy': self.accuracies,
+                'val_accuracy': self.val_accuracies
+            }, f)
+
 
 
 def get_epoch_size(files, patch_size=SIZE):
@@ -125,10 +184,9 @@ def gen_image_arrays_patches(dataset, patch_size):
     for image_filename, mask_filename, patch in dataset:
         if image_filename != last_filename:
             image = nb.load(image_filename).get_fdata()
-            image = model.image_normalize(image)
+            image = image_normalize(image)
             mask = nb.load(mask_filename).get_fdata()
-            mask = model.image_normalize(mask)
-            print(image_filename, image.min(), image.max(), mask.min(), mask.max())
+            mask = image_normalize(mask)
 
         last_filename = image_filename
         sub_image, sub_mask = get_patch(image, mask, patch, patch_size)
@@ -140,8 +198,8 @@ def load_models_patches(files, transformations, patch_size=SIZE, batch_size=BATC
     for image_filename, mask_filename in files:
         image = nb.load(str(image_filename)).get_fdata()
         mask = nb.load(str(mask_filename)).get_fdata()
-        image = model.image_normalize(image)
-        mask = model.image_normalize(mask)
+        image = image_normalize(image)
+        mask = image_normalize(mask)
         rot1, rot2 = random.choice(transformations)
         t_image = apply_transform(image, rot1, rot2)
         t_mask = apply_transform(mask, rot1, rot2)
@@ -186,13 +244,11 @@ def load_models(files, batch_size=1):
                 image, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True
             )
             mask = resize(mask, (SIZE, SIZE, SIZE), mode="constant", anti_aliasing=True)
-            image = model.image_normalize(image)
-            mask = model.image_normalize(mask)
+            image = image_normalize(image)
+            mask = image_normalize(mask)
             for rot1, rot2 in transformations:
                 t_image = apply_transform(image, rot1, rot2)
                 t_mask = apply_transform(mask, rot1, rot2)
-
-                print(hostname, image_filename, rot1, rot2)
 
                 images[ip] = t_image.reshape(SIZE, SIZE, SIZE, 1)
                 masks[ip] = t_mask.reshape(SIZE, SIZE, SIZE, 1)
@@ -252,7 +308,7 @@ def train(kmodel, deepbrain_folder):
 
     if hvd.rank() == 0:
         callbacks.append(best_model)
-        callbacks.append(model.PlotLosses())
+        callbacks.append(PlotLosses())
         callbacks.append(
             keras.callbacks.tensorboard_v1.TensorBoard(log_dir='./logs',
                                                        histogram_freq=0,
