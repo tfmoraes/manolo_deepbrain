@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.ndimage import rotate
 from skimage.transform import resize
+import pathlib
+import os
 
 
 def apply_transform(image, rot1, rot2):
@@ -36,6 +38,11 @@ def image_normalize(image, min_=0.0, max_=1.0):
 
 
 def get_plaidml_devices(gpu=False):
+    local_user_plaidml = pathlib.Path("~/.local/share/plaidml/").expanduser().absolute()
+    if local_user_plaidml.exists():
+        os.environ["RUNFILES_DIR"] = str(local_user_plaidml)
+        os.environ["PLAIDML_NATIVE_PATH"] = str(pathlib.Path("~/.local/lib/libplaidml.so").expanduser().absolute())
+
     import plaidml
 
     ctx = plaidml.Context()
