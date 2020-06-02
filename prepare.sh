@@ -7,10 +7,10 @@ if [ ! -f datasets/NFBS_Dataset.tar.gz ]; then
     wget https://fcp-indi.s3.amazonaws.com/data/Projects/RocklandSample/NFBS_Dataset.tar.gz -O datasets/NFBS_Dataset.tar.gz
 fi
 
-# Downloading ADNI dataset
-if [ ! -f  datasets/aa605acf0f2335b9b8dfdb5c66e18f68.zip ]; then
-    wget https://doid.gin.g-node.org/10.12751/g-node.aa605a/aa605acf0f2335b9b8dfdb5c66e18f68.zip -O datasets/aa605acf0f2335b9b8dfdb5c66e18f68.zip
-fi
+# # Downloading ADNI dataset
+# if [ ! -f  datasets/aa605acf0f2335b9b8dfdb5c66e18f68.zip ]; then
+    # wget https://doid.gin.g-node.org/10.12751/g-node.aa605a/aa605acf0f2335b9b8dfdb5c66e18f68.zip -O datasets/aa605acf0f2335b9b8dfdb5c66e18f68.zip
+# fi
 
 # Downloading CC359 dataset
 if [ ! -f  datasets/Original.zip ]; then
