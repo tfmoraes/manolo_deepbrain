@@ -40,30 +40,37 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
     patches_files = []
     # Mirroring
     for m in range(4):
+        print("m", m)
         if m == 0:
-            image = original_image[:]
-            mask = original_mask[:]
+            image = original_image[:].copy()
+            mask = original_mask[:].copy()
         if m == 1:
-            image = original_image[::-1]
-            mask = original_mask[::-1]
+            image = original_image[::-1].copy()
+            mask = original_mask[::-1].copy()
         elif m == 2:
-            image = original_image[:, ::-1, :]
-            mask = original_mask[:, ::-1, :]
+            image = original_image[:, ::-1, :].copy()
+            mask = original_mask[:, ::-1, :].copy()
         elif m == 3:
-            image = original_image[:, :, ::-1]
-            mask = original_mask[:, :, ::-1]
+            image = original_image[:, :, ::-1].copy()
+            mask = original_mask[:, :, ::-1].copy()
 
-        for rot1, rot2 in transformations:
-            print(m, rot1, rot2)
+        for n in range(4):
+            print("r", n)
+            if n == 0:
+                rot1, rot2 = 0, 0
+            else:
+                rot1 = random.randint(1, 359)
+                rot2 = random.randint(1, 359)
+
             patches_added = 0
 
-            image = apply_transform(image, rot1, rot2)
-            image = image_normalize(image)
+            _image = apply_transform(image, rot1, rot2)
+            _image = image_normalize(_image)
 
-            mask = apply_transform(mask, rot1, rot2)
-            mask = image_normalize(mask)
+            _mask = apply_transform(mask, rot1, rot2)
+            _mask = image_normalize(_mask)
 
-            sz, sy, sx = image.shape
+            sz, sy, sx = _image.shape
             patches = list(
                 itertools.product(
                     range(0, sz, patch_size - OVERLAP),
@@ -74,11 +81,13 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             random.shuffle(patches)
 
             for patch in patches:
-                sub_image = get_image_patch(image, patch, patch_size)
-                sub_mask = get_image_patch(mask, patch, patch_size)
+                sub_image = get_image_patch(_image, patch, patch_size)
+                sub_mask = get_image_patch(_mask, patch, patch_size)
                 if sub_mask.any():
                     tmp_filename = mktemp(suffix=".npz")
                     np.savez(tmp_filename, image=sub_image, mask=sub_mask)
+                    del sub_image
+                    del sub_mask
                     patches_files.append(tmp_filename)
                     patches_added += 1
                 if patches_added == num_patches:
@@ -90,7 +99,8 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
 def gen_all_patches(files):
     patches_files = []
     with Pool() as pool:
-        for image_patches_files in pool.imap(gen_image_patches, files):
+        for i, image_patches_files in enumerate(pool.imap(gen_image_patches, files)):
+            print(i, len(files)) 
             patches_files.extend(image_patches_files)
     return patches_files
 

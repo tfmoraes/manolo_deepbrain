@@ -28,6 +28,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv1'
     )(input_)
     out = layers.Conv3D(
         filters=8,
@@ -35,6 +36,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv2'
     )(out)
 
     conv1 = out
@@ -47,6 +49,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv3'
     )(out)
     out = layers.Conv3D(
         filters=16,
@@ -54,6 +57,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv4'
     )(out)
 
     conv2 = out
@@ -66,6 +70,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv5'
     )(out)
     out = layers.Conv3D(
         filters=32,
@@ -73,6 +78,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv6'
     )(out)
 
     conv3 = out
@@ -87,6 +93,7 @@ def generate_model():
         kernel_initializer=init,
         padding="same",
         use_bias=False,
+        name='conv7'
     )(out)
     out = layers.concatenate([out, conv3], axis=-1)
     out = layers.Conv3D(
@@ -95,6 +102,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv8'
     )(out)
 
     out = layers.Dropout(rate=0.3)(out)
@@ -106,6 +114,7 @@ def generate_model():
         kernel_initializer=init,
         padding="same",
         use_bias=False,
+        name='conv9'
     )(out)
     out = layers.concatenate([out, conv2], axis=-1)
     out = layers.Conv3D(
@@ -114,6 +123,7 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv10'
     )(out)
 
     out = layers.Dropout(rate=0.3)(out)
@@ -125,6 +135,7 @@ def generate_model():
         kernel_initializer=init,
         padding="same",
         use_bias=False,
+        name='conv11'
     )(out)
     out = layers.concatenate([out, conv1], axis=-1)
     out = layers.Conv3D(
@@ -133,11 +144,13 @@ def generate_model():
         activation="relu",
         kernel_initializer=init,
         padding="same",
+        name='conv12'
     )(out)
 
     out = layers.Dropout(rate=0.3)(out)
     out = layers.Conv3D(
-        filters=1, kernel_size=1, kernel_initializer=init, padding="same"
+        filters=1, kernel_size=1, kernel_initializer=init, padding="same",
+        name='conv13'
     )(out)
 
     #  out = layers.Activation("sigmoid")(out)

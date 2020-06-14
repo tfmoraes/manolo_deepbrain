@@ -1,11 +1,9 @@
-FROM ubuntu:20.10
+FROM nvidia/cuda:10.2-cudnn7-devel
 
 WORKDIR /code
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nvidia-cuda-toolkit \
-        nvidia-cuda-dev \
         git \
         curl \
         wget \
@@ -15,11 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-distutils \
         python3-wheel \
         python3-pip \
-        libgpuarray-dev \
-        libopenblas-dev \
         graphviz \
-        libnvrtc10.1 \
-        libcublas10 \
+        openssh-client \
+        openssh-server \
         && \
         rm -rf /var/lib/apt/lists/* \
         && \
@@ -32,9 +28,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nibabel \
         matplotlib \
         pycuda \
-        pyopencl
+        pyopencl \
+        torch \
+        torchvision \
+        tensorflow-gpu \
+        mxnet-cu102 \
+        pandas \
+        scikit-learn
 
-# nvidia-container-runtime
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
-ENV NVIDIA_REQUIRE_CUDA "cuda>=10.1 brand=tesla,driver>=384,driver<385 brand=tesla,driver>=396,driver<397 brand=tesla,driver>=410,driver<411 brand=tesla,driver>=418,driver<419"
+# Install Open MPI
+RUN mkdir /tmp/openmpi && \
+    cd /tmp/openmpi && \
+    wget https://www.open-mpi.org/software/ompi/v4.0/downloads/openmpi-4.0.0.tar.gz && \
+    tar zxf openmpi-4.0.0.tar.gz && \
+    cd openmpi-4.0.0 && \
+    ./configure --enable-orterun-prefix-by-default && \
+    make -j $(nproc) all && \
+    make install && \
+    ldconfig && \
+    rm -rf /tmp/openmpi
+
+# Install Horovod, temporarily using CUDA stubs
+RUN ldconfig /usr/local/cuda/targets/x86_64-linux/lib/stubs && \
+    HOROVOD_GPU_OPERATIONS=NCCL HOROVOD_WITH_TENSORFLOW=1 HOROVOD_WITH_PYTORCH=1 HOROVOD_WITH_MXNET=1 \
+    pip install --no-cache-dir horovod && \
+    ldconfig

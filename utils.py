@@ -22,7 +22,7 @@ def image_normalize(image, min_=0.0, max_=1.0):
     return (image - imin) * ((max_ - min_) / (imax - imin)) + min_
 
 
-def get_plaidml_devices(gpu=False):
+def get_plaidml_devices(gpu=False, _id=0):
     import plaidml
     ctx = plaidml.Context()
     plaidml.settings._setup_for_test(plaidml.settings.user_settings)
@@ -33,7 +33,7 @@ def get_plaidml_devices(gpu=False):
             if b'cuda' in device.description.lower():
                 return device
         for device in devices:
-            if b'opencl' in device.description.lower():
+            if b'opencl' in device.description.lower() and device.id.endswith(b'%d' % _id):
                 return device
     for device in devices:
         if b'llvm' in device.description.lower():
