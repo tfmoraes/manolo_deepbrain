@@ -7,12 +7,11 @@ import sys
 import json
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-os.environ["PLAIDML_DEVICE_IDS"] = "llvm_cpu.0"
+#os.environ["PLAIDML_DEVICE_IDS"] = "llvm_cpu.0"
 
 #  import ngraph_bridge
 #  ngraph_bridge.set_backend('PLAIDML')
 
-import tensorflow as tf
 
 import h5py
 import nibabel as nb
@@ -28,6 +27,7 @@ import model
 from keras import backend as K
 from keras.callbacks import ModelCheckpoint
 
+import tensorflow as tf
 import horovod.keras as hvd
 
 hvd.init()
@@ -118,27 +118,27 @@ class HDF5Sequence(keras.utils.Sequence):
         y = self.f_array["masks"]
         self.batch_size = batch_size
         node_array_size = int(np.ceil(len(x) / hvd.size()))
-        init_array = hvd.rank() * node_array_size
-        end_array = init_array + node_array_size
-        self.x = x[init_array:end_array]
-        self.y = y[init_array:end_array]
+        self.init_array = hvd.rank() * node_array_size
+        self.end_array = self.init_array + node_array_size
+        self.x = x
+        self.y = y
+        print("calculating size")
         print("size", len(self))
 
     def calc_proportions(self):
         sum_bg = 0.0
         sum_fg = 0.0
-        for m in self.y:
-            sum_bg += (m < 0.5).sum()
-            sum_fg += (m >= 0.5).sum()
+        for m in range(self.init_array, self.end_array):
+            sum_bg += (self.y[m] < 0.5).sum()
+            sum_fg += (self.y[m] >= 0.5).sum()
         return 1.0 - (sum_bg / self.y.size), 1.0 - (sum_fg / self.y.size)
 
     def __len__(self):
-        return int(np.ceil(self.x.shape[0] / self.batch_size))
+        return int(np.ceil((self.end_array - self.init_array) / self.batch_size))
 
     def __getitem__(self, idx):
-        print(idx)
-        batch_x = self.x[idx * self.batch_size : (idx + 1) * self.batch_size]
-        batch_y = self.y[idx * self.batch_size : (idx + 1) * self.batch_size]
+        batch_x = self.x[self.init_array + idx * self.batch_size :self.init_array +  (idx + 1) * self.batch_size]
+        batch_y = self.y[self.init_array + idx * self.batch_size :self.init_array +  (idx + 1) * self.batch_size]
 
         return np.array([batch_x, batch_y])
 
@@ -146,17 +146,18 @@ class HDF5Sequence(keras.utils.Sequence):
 def train(kmodel, deepbrain_folder):
     training_files_gen = HDF5Sequence("train_arrays.h5", BATCH_SIZE)
     testing_files_gen = HDF5Sequence("test_arrays.h5", BATCH_SIZE)
-    prop_bg, prop_fg = training_files_gen.calc_proportions()
+    prop_bg, prop_fg = 0.2829173877105532, 0.7170826122894467 
 
     print("proportion", prop_fg, prop_bg)
     best_model_file = pathlib.Path(
-        "weights/weights-improvement-{epoch:03d}-{val_accuracy:.5f}.hdf5"
+        "weights/weights-improvement-{epoch:03d}.hdf5"
     ).resolve()
     best_model = ModelCheckpoint(
         str(best_model_file), monitor="val_loss", verbose=1, save_best_only=True
     )
 
-    opt = keras.optimizers.Adadelta(lr=1.0 * hvd.size())
+    scaled_lr = 1.0 * hvd.size()
+    opt = keras.optimizers.Adadelta(lr=scaled_lr)
     opt = hvd.DistributedOptimizer(opt)
     kmodel.compile(optimizer=opt, loss="binary_crossentropy", metrics=["accuracy"])
 
@@ -173,18 +174,18 @@ def train(kmodel, deepbrain_folder):
         # Horovod: using `lr = 1.0 * hvd.size()` from the very beginning leads to worse final
         # accuracy. Scale the learning rate `lr = 1.0` ---> `lr = 1.0 * hvd.size()` during
         # the first five epochs. See https://arxiv.org/abs/1706.02677 for details.
-        hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=5, verbose=1),
+        hvd.callbacks.LearningRateWarmupCallback(warmup_epochs=5, verbose=1, initial_lr=scaled_lr),
         # Reduce the learning rate if training plateaues.
         keras.callbacks.ReduceLROnPlateau(patience=10, verbose=1),
-        keras.callbacks.EarlyStopping(
-            monitor="val_loss", mode="min", patience=20, verbose=True
-        ),
+        #keras.callbacks.EarlyStopping(
+        #    monitor="val_loss", mode="min", patience=20, verbose=True
+        #),
     ]
 
-    verbose = 1
+    verbose = 0
 
     if hvd.rank() == 0:
-        verbose = 2
+        verbose = 1
         callbacks.append(best_model)
         callbacks.append(
             keras.callbacks.TensorBoard(
