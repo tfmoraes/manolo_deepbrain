@@ -1,5 +1,6 @@
 import pylidc
 import sys
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,16 +12,22 @@ from pylidc.utils import consensus
 
 import nibabel as nib
 
+DATA_PATH = "/home/phamorim/Sources/manolo_deepbrain/lung_nodule_utils/DATA_TESTE"
 
-def save_to_nifti(matrix, info, filename):
-    
+def save_to_nifti(matrix, info, folder_name, filename):
+   
+    folder_path = os.path.join(DATA_PATH,folder_name)
+
+    if not(os.path.exists(folder_path)):
+        os.mkdir(folder_path)
+
     img_nifti = nib.Nifti1Image(np.rot90(matrix), None)#np.swapaxes(np.fliplr(matrix), 0, 2), None)
     img_nifti.header.set_zooms(info['spacing'])
     img_nifti.header.set_dim_info(slice=0)
-    nib.save(img_nifti, filename)
+    nib.save(img_nifti, os.path.join(folder_path,filename))
+
 
 def save_txt_info(filename, data):
-
     f = open(filename, "w")
     f.write(data)
     f.close()
@@ -32,7 +39,7 @@ def plot_concesus():
     scans = pl.query(pl.Scan)
     data = ""
 
-    c = 0
+    #c = 0
 
     for scan in scans:
         q = pl.query(pl.Scan).filter(pl.Scan.patient_id == scan.patient_id).first()
@@ -96,13 +103,16 @@ def plot_concesus():
         #plt.imshow(vol[xi:xf,yi:yf,zi], cmap=plt.cm.Greys_r)
         #plt.show()
 
-        #save_to_nifti(vol_mask.astype(float), info, "teste_vol_mask.nii.gz")
-        #save_to_nifti(vol.astype("int16"), info, "teste_vol.nii.gz")
-        #break
-        c += 1
 
-        if c == 10:
-            break
+        save_to_nifti(vol_mask.astype(float), info, q.patient_id, "mask.nii.gz")
+        save_to_nifti(vol.astype("int16"), info, q.patient_id, "ct.nii.gz")
+        #break
+        
+
+        #c += 1
+
+        #if c == 10:
+        #    break
 
     save_txt_info("nodules_list.txt", data)
 
