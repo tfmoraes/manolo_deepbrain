@@ -12,7 +12,7 @@ from pylidc.utils import consensus
 
 import nibabel as nib
 
-DATA_PATH = "/home/phamorim/Sources/manolo_deepbrain/lung_nodule_utils/DATA_TESTE"
+DATA_PATH = "/mnt/ed1b201c-adcd-4fbb-a01a-5f3d84b9a1ed/LIDC-IDRI/LIDC_IDRI_AS_NIFTI/"
 
 def save_to_nifti(matrix, info, folder_name, filename):
    
@@ -53,6 +53,7 @@ def plot_concesus():
         # Cluster the annotations for the scan, and grab one.
         nods = scan.cluster_annotations()
         
+        print(q.patient_id, "\n")
 
         data += q.patient_id
         coordinates = ""
