@@ -125,10 +125,15 @@ def h5file_from_patches(patches_files, filename, patch_size=SIZE):
 
 
 def main():
-    deepbrain_folder = pathlib.Path("datasets").resolve()
-    cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
-    nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
-    files = cc359_files + nfbs_files
+    #deepbrain_folder = pathlib.Path("datasets").resolve()
+    deepbrain_folder = pathlib.Path("/mnt/ed1b201c-adcd-4fbb-a01a-5f3d84b9a1ed/datasets_teste/").resolve()
+    files = file_utils.get_lidc_filenames(deepbrain_folder)
+
+    print(files)
+
+    #cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
+    #nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)
+    #files = cc359_files + nfbs_files
 
     patches_files = gen_all_patches(files)
     random.shuffle(patches_files)

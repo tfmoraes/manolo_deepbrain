@@ -25,6 +25,25 @@ def get_nfbs_filenames(base_folder):
     return files
 
 
+def get_lidc_filenames(base_folder):
+    """
+    lung nodules dataset
+    """
+    
+    lidc_folder = base_folder.joinpath("LIDC-IDRI")
+
+    files = []
+
+    for folder_name in list(lidc_folder.glob("*")):
+        
+        volume, mask = (folder_name.joinpath("ct.nii.gz"),\
+                folder_name.joinpath("mask.nii.gz"))
+
+        files.append((volume, mask))
+
+    return files
+
+
 def main():
     base_folder = pathlib.Path(sys.argv[1]).resolve()
     cc359_files = get_cc359_filenames(base_folder)
