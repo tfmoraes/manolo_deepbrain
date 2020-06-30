@@ -69,7 +69,7 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             _mask = apply_transform(mask, rot1, rot2)
             _mask = image_normalize(_mask)
 
-            if np.isnan(_mask).any():
+            if _image is None or _mask is None:
                 continue
 
             sz, sy, sx = _image.shape

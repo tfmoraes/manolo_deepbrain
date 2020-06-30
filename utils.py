@@ -1,18 +1,26 @@
 import numpy as np
+import transformations
 from scipy.ndimage import rotate
 from skimage.transform import resize
+import transforms
 
+def apply_transform(image, r1, r2, r3):
+    r1 = np.deg2rad(r1)
+    r2 = np.deg2rad(r2)
+    r3 = np.deg2rad(r3)
+    cz, cy, cx = [i // 2 + 1 for i in image.shape]
+    T0 = transformations.translation_matrix((-cz, -cy, -cx))
+    Rz = transformations.rotation_matrix(r1, (1, 0, 0))
+    Ry = transformations.rotation_matrix(r2, (0, 1, 0))
+    Rx = transformations.rotation_matrix(r3, (0, 0, 1))
+    T1 = transformations.translation_matrix((cz, cy, cx))
+    M = transformations.concatenate_matrices(T1, Rz, Ry, Rx, T0)
 
-def apply_transform(image, rot1, rot2):
-    if rot1 > 0:
-        image = rotate(
-            image, angle=rot1, axes=(1, 0), output=np.float32#, order=0, prefilter=False
-        )
-    if rot2 > 0:
-        image = rotate(
-            image, angle=rot2, axes=(2, 1), output=np.float32#, order=0, prefilter=False
-        )
-    return image
+    out = np.zeros_like(image)
+    transforms.apply_view_matrix_transform(
+        image, (1, 1, 1), M, 0, "AXIAL", 2, image.min(), out
+    )
+    return out
 
 
 
@@ -20,7 +28,7 @@ def apply_transform(image, rot1, rot2):
 def image_normalize(image, min_=0.0, max_=1.0):
     imin, imax = image.min(), image.max()
     if imin == imax:
-        print(imin, imax)
+        return None
     return (image - imin) * ((max_ - min_) / (imax - imin)) + min_
 
 
