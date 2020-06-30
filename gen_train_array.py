@@ -56,7 +56,7 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
 
         for n in range(6):
             if n == 0:
-                rot1, rot2, rot3 = 0, 0
+                rot1, rot2, rot3 = 0, 0, 0
             else:
                 rot1 = random.randint(1, 359)
                 rot2 = random.randint(1, 359)
