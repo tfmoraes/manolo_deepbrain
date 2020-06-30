@@ -331,11 +331,8 @@ class HDF5Sequence(keras.utils.Sequence):
         self.batch_size = batch_size
 
     def calc_proportions(self):
-        sum_bg = 0.0
-        sum_fg = 0.0
-        for m in self.y:
-            sum_bg += (m < 0.5).sum()
-            sum_fg += (m >= 0.5).sum()
+        sum_bg = self.f_array["bg"][()]
+        sum_fg = self.f_array["fg"][()]
         return 1.0 - (sum_bg/self.y.size), 1.0 - (sum_fg/self.y.size)
 
     def __len__(self):

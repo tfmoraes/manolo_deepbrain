@@ -54,8 +54,7 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             image = original_image[:, :, ::-1].copy()
             mask = original_mask[:, :, ::-1].copy()
 
-        for n in range(4):
-            print("r", n)
+        for n in range(8):
             if n == 0:
                 rot1, rot2 = 0, 0
             else:
@@ -70,6 +69,9 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             _mask = apply_transform(mask, rot1, rot2)
             _mask = image_normalize(_mask)
 
+            if np.isnan(_mask).any():
+                continue
+
             sz, sy, sx = _image.shape
             patches = list(
                 itertools.product(
@@ -83,7 +85,8 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             for patch in patches:
                 sub_image = get_image_patch(_image, patch, patch_size)
                 sub_mask = get_image_patch(_mask, patch, patch_size)
-                if sub_mask.any():
+                if (sub_mask > 0.5).sum() >= (sub_mask.size * 0.1):
+                    print("patch gerado")
                     tmp_filename = mktemp(suffix=".npz")
                     np.savez(tmp_filename, image=sub_image, mask=sub_mask)
                     del sub_image
@@ -115,21 +118,26 @@ def h5file_from_patches(patches_files, filename, patch_size=SIZE):
             "masks", (size, patch_size, patch_size, patch_size, 1), dtype="float32"
         )
 
+        f_array["bg"] = 0
+        f_array["fg"] = 0
+
         for n, patch_file in enumerate(patches_files):
             print("loading", patch_file)
             arr = np.load(patch_file)
             images[n] = arr["image"].reshape(patch_size, patch_size, patch_size, 1)
             masks[n] = arr["mask"].reshape(patch_size, patch_size, patch_size, 1)
+            f_array["bg"][()] += (masks[n] < 0.5).sum()
+            f_array["fg"][()] += (masks[n] >= 0.5).sum()
             os.remove(patch_file)
             print(n, size)
 
 
 def main():
     #deepbrain_folder = pathlib.Path("datasets").resolve()
-    deepbrain_folder = pathlib.Path("/mnt/ed1b201c-adcd-4fbb-a01a-5f3d84b9a1ed/datasets_teste/").resolve()
+    deepbrain_folder = pathlib.Path("datasets").resolve()
     files = file_utils.get_lidc_filenames(deepbrain_folder)
 
-    print(files)
+    print(files, deepbrain_folder)
 
     #cc359_files = file_utils.get_cc359_filenames(deepbrain_folder)
     #nfbs_files = file_utils.get_nfbs_filenames(deepbrain_folder)

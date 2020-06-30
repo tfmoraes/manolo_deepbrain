@@ -126,12 +126,9 @@ class HDF5Sequence(keras.utils.Sequence):
         print("size", len(self))
 
     def calc_proportions(self):
-        sum_bg = 0.0
-        sum_fg = 0.0
-        for m in range(self.init_array, self.end_array):
-            sum_bg += (self.y[m] < 0.5).sum()
-            sum_fg += (self.y[m] >= 0.5).sum()
-        return 1.0 - (sum_bg / self.y.size), 1.0 - (sum_fg / self.y.size)
+        sum_bg = self.f_array["bg"][()]
+        sum_fg = self.f_array["fg"][()]
+        return 1.0 - (sum_bg/self.y.size), 1.0 - (sum_fg/self.y.size)
 
     def __len__(self):
         return int(np.ceil((self.end_array - self.init_array) / self.batch_size))
@@ -146,7 +143,7 @@ class HDF5Sequence(keras.utils.Sequence):
 def train(kmodel, deepbrain_folder):
     training_files_gen = HDF5Sequence("train_arrays.h5", BATCH_SIZE)
     testing_files_gen = HDF5Sequence("test_arrays.h5", BATCH_SIZE)
-    prop_bg, prop_fg = 0.2829173877105532, 0.7170826122894467 
+    prop_bg, prop_fg = training_files_gen.calc_proportions()
 
     print("proportion", prop_fg, prop_bg)
     best_model_file = pathlib.Path(

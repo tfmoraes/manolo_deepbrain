@@ -6,11 +6,11 @@ from skimage.transform import resize
 def apply_transform(image, rot1, rot2):
     if rot1 > 0:
         image = rotate(
-            image, angle=rot1, axes=(1, 0), output=np.float32, order=0, prefilter=False
+            image, angle=rot1, axes=(1, 0), output=np.float32#, order=0, prefilter=False
         )
     if rot2 > 0:
         image = rotate(
-            image, angle=rot2, axes=(2, 1), output=np.float32, order=0, prefilter=False
+            image, angle=rot2, axes=(2, 1), output=np.float32#, order=0, prefilter=False
         )
     return image
 
@@ -19,6 +19,8 @@ def apply_transform(image, rot1, rot2):
 
 def image_normalize(image, min_=0.0, max_=1.0):
     imin, imax = image.min(), image.max()
+    if imin == imax:
+        print(imin, imax)
     return (image - imin) * ((max_ - min_) / (imax - imin)) + min_
 
 
