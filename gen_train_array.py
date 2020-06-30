@@ -54,19 +54,20 @@ def gen_image_patches(files, patch_size=SIZE, num_patches=NUM_PATCHES):
             image = original_image[:, :, ::-1].copy()
             mask = original_mask[:, :, ::-1].copy()
 
-        for n in range(8):
+        for n in range(6):
             if n == 0:
-                rot1, rot2 = 0, 0
+                rot1, rot2, rot3 = 0, 0
             else:
                 rot1 = random.randint(1, 359)
                 rot2 = random.randint(1, 359)
+                rot3 = random.randint(1, 359)
 
             patches_added = 0
 
-            _image = apply_transform(image, rot1, rot2)
+            _image = apply_transform(image, rot1, rot2, rot3)
             _image = image_normalize(_image)
 
-            _mask = apply_transform(mask, rot1, rot2)
+            _mask = apply_transform(mask, rot1, rot2, rot3)
             _mask = image_normalize(_mask)
 
             if _image is None or _mask is None:
